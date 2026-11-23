@@ -152,6 +152,9 @@ async fn progress(
 async fn file_status_waits_behind_pending_delivery_after_remote_file_ack() {
     let (f, a, _) = prepared().await;
     let p = accepted(&f, &a).await;
+    // The intentionally blocked delivery round can start before the background
+    // file status index is seeded. Prepare it before testing RPC ordering.
+    assert!(f.alice.seed_epoch_file_status_index().await.unwrap().ready);
     let metadata = Arc::new(FileStatusProbe::new());
     let rpc = Arc::new(Probe {
         file_status: Some(metadata.clone()),
