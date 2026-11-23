@@ -1,0 +1,73 @@
+# Dedicated zchat-load project, configured by scripts/load/lab.py.
+# Contains only synthetic data. Resource limits are part of the test conditions.
+services:
+  server:
+    cpus: 2
+    mem_limit: 1g
+  db:
+    cpus: 2
+    mem_limit: 1g
+  redis:
+    cpus: 0.5
+    mem_limit: 128m
+  nginx:
+    cpus: 0.5
+    mem_limit: 128m
+  livekit:
+    cpus: 2
+    mem_limit: 1g
+  prometheus:
+    cpus: 1
+    mem_limit: 512m
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.size=512MB
+      - --web.enable-remote-write-receiver
+    volumes:
+      - ./monitoring/prometheus.load.yml:/etc/prometheus/prometheus.yml:ro
+  grafana:
+    cpus: 1
+    mem_limit: 768m
+    # Leave headroom for plugins, mapped files and the container's page cache.
+    environment:
+      GOMEMLIMIT: 512MiB
+  postgres-exporter:
+    cpus: 0.25
+    mem_limit: 128m
+  pushgateway:
+    image: prom/pushgateway:v1.11.4@sha256:91a56b89b97dd8a5e1e4fa8b5bbbd86dd57a87a2a3cee3a3ce3368b40ef158ef
+    cpus: 0.25
+    mem_limit: 128m
+    ports:
+      - "127.0.0.1:39091:9091"
+  seed:
+    image: node:22.23.3-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402
+    profiles: [load-tools]
+    user: "${LOCAL_UID:?Run lab.py init}:${LOCAL_GID:?Run lab.py init}"
+    cpus: 1
+    mem_limit: 256m
+    environment:
+      LOAD_PAIRS: ${LOAD_PAIRS:-10}
+    volumes:
+      - ./scripts/load:/scripts:ro
+      - ./out/load/data:/data
+    command: [node, /scripts/seed.mjs]
+  k6:
+    image: grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34
+    profiles: [load-tools]
+    user: "${LOCAL_UID:?Run lab.py init}:${LOCAL_GID:?Run lab.py init}"
+    cpus: 2
+    mem_limit: 1g
+    environment:
+      LOAD_PROFILE: ${LOAD_PROFILE:-smoke}
+      K6_NO_USAGE_REPORT: "true"
+      K6_PROMETHEUS_RW_SERVER_URL: http://prometheus:9090/api/v1/write
+      K6_PROMETHEUS_RW_TREND_STATS: p(95),p(99),avg,max
+      K6_PROMETHEUS_RW_STALE_MARKERS: "true"
+    volumes:
+      - ./scripts/load:/scripts:ro
+      - ./out/load/data:/data:ro
+      - ${LOAD_RESULTS_DIR:?Run through lab.py}:/results
+    command: [run, --out, experimental-prometheus-rw, /scripts/chat.js]

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zchat Desktop - Настройки сервера</title>
+  <link rel="stylesheet" href="./shared.css">
+</head>
+<body>
+  <div class="shell stack">
+    <div>
+      <div class="eyebrow">Tauri Desktop</div>
+      <h1>Настройки сервера</h1>
+      <p>
+        Укажите адрес вашего Zchat-сервера. Desktop-клиент будет открывать web-интерфейс
+        мессенджера внутри приложения через Tauri и Rust.
+      </p>
+    </div>
+
+    <div class="card stack">
+      <div>
+        <label class="label" for="serverUrl">Адрес сервера</label>
+        <input class="input mono" id="serverUrl" type="text" placeholder="https://chat.example.com">
+      </div>
+      <div class="meta">
+        <div class="meta-row">
+          <span>Адрес по умолчанию</span>
+          <span class="mono" id="defaultServerUrl">...</span>
+        </div>
+        <div class="meta-row">
+          <span>Версия приложения</span>
+          <span class="mono" id="appVersion">...</span>
+        </div>
+      </div>
+      <div id="status" class="status"></div>
+      <div class="actions">
+        <button class="btn btn-primary" id="saveBtn">Сохранить и подключиться</button>
+        <button class="btn" id="resetBtn">Вернуть по умолчанию</button>
+        <button class="btn btn-danger" id="cancelBtn">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./tauri-api.js"></script>
+  <script src="./settings.js"></script>
+</body>
+</html>

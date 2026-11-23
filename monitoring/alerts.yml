@@ -1,0 +1,32 @@
+groups:
+  - name: zchat
+    rules:
+      - alert: ZchatBackendDown
+        expr: up{job="zchat-backend"} == 0
+        for: 30s
+        labels: {severity: critical}
+        annotations: {summary: "Go backend scrape failed"}
+      - alert: ZchatDatabaseUnavailable
+        expr: pg_up{job="zchat-postgres"} == 0 or up{job="zchat-postgres"} == 0
+        for: 30s
+        labels: {severity: critical}
+        annotations: {summary: "PostgreSQL or its exporter is unavailable"}
+      - alert: ZchatHTTPServerErrors
+        expr: sum(rate(http_requests_total{job="zchat-backend",status_code=~"5.."}[2m])) / clamp_min(sum(rate(http_requests_total{job="zchat-backend"}[2m])), 0.001) > 0.05
+        for: 1m
+        labels: {severity: warning}
+        annotations: {summary: "More than 5% of HTTP requests return 5xx"}
+      - alert: ZchatWebSocketDeliveryRisk
+        expr: increase(websocket_broadcast_enqueue_failures_total{job="zchat-backend"}[2m]) > 0 or increase(websocket_slow_client_disconnects_total{job="zchat-backend"}[2m]) > 0
+        labels: {severity: warning}
+        annotations: {summary: "Broadcast queue failure or slow-client disconnection"}
+      - alert: ZchatMessagePersistenceFailures
+        expr: sum(rate(websocket_message_results_total{job="zchat-backend",result=~"error|timeout"}[2m])) > 0
+        for: 1m
+        labels: {severity: warning}
+        annotations: {summary: "Chat message persistence is failing or timing out"}
+      - alert: ZchatMediaUnavailable
+        expr: (up{job="zchat-livekit"} == 0) and on() (zchat_calls_enabled{job="zchat-backend"} == 1)
+        for: 30s
+        labels: {severity: warning}
+        annotations: {summary: "Calls enabled but LiveKit metrics target unavailable"}

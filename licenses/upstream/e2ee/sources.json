@@ -1,0 +1,66 @@
+{
+  "hax-lib-0.3.7": {
+    "file": "hax-Apache-2.0.txt",
+    "source": "https://github.com/hacspec/hax/blob/d8b5b3d3b666fee8943a351445d2b680105e8ea3/LICENSE"
+  },
+  "hax-lib-macros-0.3.7": {
+    "file": "hax-Apache-2.0.txt",
+    "source": "https://github.com/hacspec/hax/blob/d8b5b3d3b666fee8943a351445d2b680105e8ea3/LICENSE"
+  },
+  "hpke-rs-0.7.0": {
+    "file": "MPL-2.0.txt",
+    "source": "https://www.mozilla.org/en-US/MPL/2.0/ (declared at https://github.com/celabshq/libcrux/blob/c5fb80f37530ee9b2df9501ae5ff8cb4a973a4bd/crates/protocols/hpke/Cargo.toml)"
+  },
+  "hpke-rs-crypto-0.7.0": {
+    "file": "MPL-2.0.txt",
+    "source": "https://www.mozilla.org/en-US/MPL/2.0/ (declared at https://github.com/celabshq/libcrux/blob/c5fb80f37530ee9b2df9501ae5ff8cb4a973a4bd/crates/protocols/hpke/traits/Cargo.toml)"
+  },
+  "libcrux-hacl-rs-0.0.5": {
+    "file": "libcrux-Apache-2.0.txt",
+    "source": "https://github.com/cryspen/libcrux/blob/451259bb704d4a9dab8cd31ac68a97e766fbd2bc/LICENSE"
+  },
+  "libcrux-hmac-0.0.8": {
+    "file": "libcrux-Apache-2.0.txt",
+    "source": "https://github.com/cryspen/libcrux/blob/c5fb80f37530ee9b2df9501ae5ff8cb4a973a4bd/LICENSE"
+  },
+  "libcrux-intrinsics-0.0.8": {
+    "file": "libcrux-Apache-2.0.txt",
+    "source": "https://github.com/cryspen/libcrux/blob/c5fb80f37530ee9b2df9501ae5ff8cb4a973a4bd/LICENSE"
+  },
+  "libcrux-macros-0.0.3": {
+    "file": "libcrux-Apache-2.0.txt",
+    "source": "https://github.com/cryspen/libcrux/blob/8ebe73237378c80b86a953ec8a77bdd3299918e7/LICENSE"
+  },
+  "libcrux-ml-kem-0.0.10": {
+    "file": "libcrux-Apache-2.0.txt",
+    "source": "https://github.com/cryspen/libcrux/blob/c5fb80f37530ee9b2df9501ae5ff8cb4a973a4bd/LICENSE"
+  },
+  "libcrux-platform-0.0.3": {
+    "file": "libcrux-Apache-2.0.txt",
+    "source": "https://github.com/cryspen/libcrux/blob/316fcd6c19c2e33bd0429e1319b6557d91038512/LICENSE"
+  },
+  "libcrux-secrets-0.0.6": {
+    "file": "libcrux-Apache-2.0.txt",
+    "source": "https://github.com/cryspen/libcrux/blob/c5fb80f37530ee9b2df9501ae5ff8cb4a973a4bd/LICENSE"
+  },
+  "libcrux-sha2-0.0.8": {
+    "file": "libcrux-Apache-2.0.txt",
+    "source": "https://github.com/cryspen/libcrux/blob/c5fb80f37530ee9b2df9501ae5ff8cb4a973a4bd/LICENSE"
+  },
+  "libcrux-sha3-0.0.10": {
+    "file": "libcrux-Apache-2.0.txt",
+    "source": "https://github.com/cryspen/libcrux/blob/c5fb80f37530ee9b2df9501ae5ff8cb4a973a4bd/LICENSE"
+  },
+  "libcrux-traits-0.0.8": {
+    "file": "libcrux-Apache-2.0.txt",
+    "source": "https://github.com/cryspen/libcrux/blob/c5fb80f37530ee9b2df9501ae5ff8cb4a973a4bd/LICENSE"
+  },
+  "tonic-prost-0.14.6": {
+    "file": "tonic-MIT.txt",
+    "source": "https://github.com/hyperium/tonic/blob/6cb6056b5a748bc5a29bd48f4602dbc4e552bb7d/LICENSE"
+  },
+  "tonic-prost-build-0.14.6": {
+    "file": "tonic-MIT.txt",
+    "source": "https://github.com/hyperium/tonic/blob/6cb6056b5a748bc5a29bd48f4602dbc4e552bb7d/LICENSE"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "desktop-capability",
+  "description": "Allows bundled desktop pages to talk to the Rust backend.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "allow-get-config",
+    "allow-retry-load",
+    "allow-open-settings-window",
+    "allow-open-external",
+    "allow-check-server",
+    "allow-cancel-request",
+    "allow-socket-connect",
+    "allow-socket-send",
+    "allow-socket-close",
+    "allow-socket-ack",
+    "allow-prepare-image",
+    "allow-reset-microphone-permission",
+    "allow-window-control",
+    "allow-e2ee-session",
+    "allow-e2ee-conversation",
+    "allow-e2ee-send-text",
+    "allow-e2ee-prepare-attachment",
+    "allow-e2ee-attachment-input",
+    "allow-e2ee-download-attachment",
+    "allow-e2ee-local-attachment",
+    "allow-e2ee-read",
+    "allow-e2ee-recovery",
+    "allow-e2ee-status",
+    "allow-e2ee-ack",
+    "allow-e2ee-cancel",
+    "allow-e2ee-setup",
+    "allow-e2ee-retry",
+    "allow-e2ee-replace"
+  ]
+}

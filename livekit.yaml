@@ -1,0 +1,19 @@
+port: 7880
+# Internal-only scrape endpoint; no host port is published.
+prometheus_port: 6789
+bind_addresses:
+  - ""
+
+rtc:
+  # Compose supplies node_ip through --node-ip (loopback by default). Keep it
+  # out of YAML: this LiveKit version does not replace an IPv4 loaded from YAML.
+  # Firefox needs a reachable non-loopback IP; see development.md.
+  udp_port: 7882
+  tcp_port: 7881
+  use_external_ip: false
+
+# keys:
+#   "${LIVEKIT_API_KEY}": "${LIVEKIT_API_SECRET}"
+
+logging:
+  level: info

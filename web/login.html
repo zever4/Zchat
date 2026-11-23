@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="color-scheme" content="dark">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Zchat — Авторизация</title>
+<link href="/vendor/fonts/plus-jakarta-sans.css" rel="stylesheet">
+<link rel="stylesheet" href="login.css?v=1">
+</head>
+<body>
+
+<div class="container">
+  <div class="left">
+    <div class="logo">
+      <div class="logo-icon">Z</div>
+      <span class="logo-text">Zchat</span>
+    </div>
+
+    <!-- REGISTER -->
+    <div class="form-view hidden" id="view-register">
+      <h1>Создать аккаунт</h1>
+      <p class="subtitle">Заполните поля для регистрации</p>
+
+      <div class="form-group" id="fg-reg-email">
+        <label>Email</label>
+        <input type="email" id="reg-email" placeholder="you@example.com" autocomplete="off" spellcheck="false">
+        <div class="error-msg">Введите корректный email</div>
+      </div>
+
+      <div class="form-group" id="fg-reg-user">
+        <label>Логин</label>
+        <input type="text" id="reg-user" placeholder="username" autocomplete="off" spellcheck="false">
+        <div class="error-msg">Минимум 3 символа</div>
+      </div>
+
+      <div class="form-group" id="fg-reg-pass">
+        <label>Пароль</label>
+        <div class="password-wrapper">
+          <input type="password" id="reg-pass" placeholder="••••••••">
+          <button type="button" class="toggle-pass" data-target="reg-pass" aria-label="Toggle password">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <div class="strength-bar" id="str-bar">
+          <div class="seg"></div><div class="seg"></div><div class="seg"></div><div class="seg"></div>
+        </div>
+        <div class="strength-label" id="str-label"></div>
+        <div class="error-msg">Минимум 6 символов</div>
+      </div>
+
+      <div class="form-group" id="fg-reg-pass2">
+        <label>Подтвердите пароль</label>
+        <div class="password-wrapper">
+          <input type="password" id="reg-pass2" placeholder="••••••••">
+          <button type="button" class="toggle-pass" data-target="reg-pass2" aria-label="Toggle password">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <div class="error-msg">Пароли не совпадают</div>
+      </div>
+
+      <button class="btn-primary" id="btn-register" type="button">Зарегистрироваться</button>
+      <div class="server-error" id="reg-server-error"></div>
+
+      <div class="divider"><span>или</span></div>
+
+      <button class="btn-google" id="btn-google-reg" type="button">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A11.96 11.96 0 0 0 1 12c0 1.94.46 3.77 1.18 5.07l3.66-2.98z" fill="#FBBC05"/>
+          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+        </svg>
+        Продолжить с Google
+      </button>
+
+      <p class="footer-text">Уже есть аккаунт? <a id="go-login">Войти</a></p>
+    </div>
+
+    <!-- LOGIN -->
+    <div class="form-view" id="view-login">
+      <h1>Войти в аккаунт</h1>
+      <p class="subtitle">Рады видеть вас снова</p>
+
+      <div class="form-group" id="fg-login-email">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="you@example.com" autocomplete="off" spellcheck="false">
+        <div class="error-msg">Введите email</div>
+      </div>
+
+      <div class="form-group" id="fg-login-pass">
+        <label>Пароль</label>
+        <div class="password-wrapper">
+          <input type="password" id="login-pass" placeholder="••••••••">
+          <button type="button" class="toggle-pass" data-target="login-pass" aria-label="Toggle password">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <div class="error-msg">Введите пароль</div>
+      </div>
+
+      <button class="btn-primary" id="btn-login" type="button">Войти</button>
+      <div class="server-error" id="login-server-error"></div>
+
+      <div class="divider"><span>или</span></div>
+
+      <button class="btn-google" id="btn-google-login" type="button">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A11.96 11.96 0 0 0 1 12c0 1.94.46 3.77 1.18 5.07l3.66-2.98z" fill="#FBBC05"/>
+          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+        </svg>
+        Войти через Google
+      </button>
+
+      <p class="footer-text">Нет аккаунта? <a id="go-register">Создать</a></p>
+    </div>
+
+    <!-- SUCCESS -->
+    <div class="success-state" id="success">
+      <div class="check-circle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <h2 id="success-title">Готово!</h2>
+      <p id="success-sub">Аккаунт успешно создан</p>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right">
+    <div class="z-canvas" id="z-canvas"></div>
+    <div class="right-content">
+      <div class="brand-title">Zchat</div>
+      <div class="brand-sub">Общайся без границ</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="login.js?v=1"></script>
+</body>
+</html>

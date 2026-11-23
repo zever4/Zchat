@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package user;
+
+option go_package = "./gen/user";
+
+// 1. Импортируем аннотации
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+service UserService {
+  // 2. Добавляем опцию http
+  rpc GetMyProfile (GetMyProfileRequest) returns (UserResponse) {
+    option (google.api.http) = {
+      get: "/api/profile"
+    };
+  }
+
+  rpc GetUserProfile (GetUserProfileRequest) returns (UserResponse) {
+    option (google.api.http) = {
+      get: "/api/users/{target_id}/profile"
+    };
+  }
+
+  rpc UpdateProfile (UpdateProfileRequest) returns (UpdateProfileResponse) {
+    option (google.api.http) = {
+      put: "/api/profile"
+      body: "*"
+    };
+  }
+}
+
+message GetMyProfileRequest {
+  int64 user_id = 1;
+}
+
+message GetUserProfileRequest {
+  int64 target_id = 1;
+}
+
+message UpdateProfileRequest {
+  string bio = 1;
+}
+
+message UserResponse {
+  int64 id = 1;
+  string username = 2;
+  string email = 3;
+  string bio = 4;
+  string avatar_url = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message UpdateProfileResponse {
+  bool ok = 1;
+}

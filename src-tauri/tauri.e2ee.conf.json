@@ -1,0 +1,9 @@
+{
+  "bundle": {
+    "resources": {
+      "../licenses/native/": null,
+      "../licenses/native/Microsoft-WebView2Loader.txt": "licenses/Microsoft-WebView2Loader.txt",
+      "../licenses/native-e2ee/": "licenses/"
+    }
+  }
+}

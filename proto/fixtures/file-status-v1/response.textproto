@@ -1,0 +1,27 @@
+# PUBLIC SYNTHETIC metadata; late FILEACK and expiry/replacement coexist.
+files {
+ format_version: 1
+ reference {
+binding {
+ protocol_version: 3
+ conversation_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+ epoch: 9007199254741009
+ message_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+ sender { user_id: "11111111-1111-4111-8111-111111111111" device_id: 1 generation_id: "33333333-3333-4333-8333-333333333333" }
+ recipient { user_id: "22222222-2222-4222-8222-222222222222" device_id: 1 generation_id: "44444444-4444-4444-8444-444444444444" }
+ envelope_digest: "\xc8\xcd\x0c\xcf\x0c\xb3\x67\xbc\xaf\x43\x78\x9a\xaa\x96\xde\xca\xd7\x74\x10\x52\xb9\x0c\x93\xc3\x40\xc7\x03\xf5\xf6\x33\x49\x3f"
+}
+blob { format_version: 1 blob_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc" ciphertext_bytes: 37 sha256: "\x96\x1a\x81\xb4\xe1\x88\xc0\xd7\x13\xb6\x8b\x34\x06\xd2\x85\x43\x13\xcf\x00\x22\xfb\x4e\x83\x8f\x11\xd3\xf6\x8a\x93\xa1\x6d\xc5" }
+ }
+ receipt {
+  message_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+  envelope_digest: "\xc8\xcd\x0c\xcf\x0c\xb3\x67\xbc\xaf\x43\x78\x9a\xaa\x96\xde\xca\xd7\x74\x10\x52\xb9\x0c\x93\xc3\x40\xc7\x03\xf5\xf6\x33\x49\x3f"
+  stored_at_unix_ms: 1700000000000
+  expires_at_unix_ms: 1702592000000
+  crypto_epoch: 9007199254741009
+ }
+ observed_at_unix_ms: 1702592000123
+ expires_at_unix_ms: 1702592000000
+ acknowledged_at_unix_ms: 1702592000050
+ recipient_replaced_at_unix_ms: 1702592000100
+}

@@ -1,0 +1,135 @@
+name: Native
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  processor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        env:
+          POSTGRES_USER: zchat_ci
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: zchat_ci
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U zchat_ci -d zchat_ci"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the experimental protocol generator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+      - name: Check workspace formatting
+        run: cargo fmt --all --check
+      - name: Check the processor with all features
+        run: cargo clippy -p rust-processor --locked --all-features --all-targets -- -D warnings
+      - name: Test compression and protocol stores
+        run: cargo test -p rust-processor --locked --all-features
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Check native E2EE recovery against Go and PostgreSQL
+        env:
+          ZCHAT_TEST_DATABASE_URL: postgres://zchat_ci:ci-only-password@127.0.0.1:5432/zchat_ci?sslmode=disable
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifacts="$RUNNER_TEMP/zchat-rust-artifacts.json"
+          cargo test -p rust-processor --locked --all-features --lib --no-run --message-format=json > "$artifacts"
+          ZCHAT_RUST_E2EE_TEST_BIN="$(
+            python3 - "$artifacts" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1]) as artifacts:
+              binary, = [
+                  record["executable"]
+                  for record in map(json.loads, artifacts)
+                  if record.get("reason") == "compiler-artifact"
+                  and record["target"]["name"] == "rust_processor"
+                  and record["profile"]["test"]
+                  and record["executable"]
+              ]
+          print(binary)
+          PY
+          )"
+          test -x "$ZCHAT_RUST_E2EE_TEST_BIN"
+          export ZCHAT_RUST_E2EE_TEST_BIN
+          go test -race ./internal/grpc -run '^TestE2EERustEpochTransportPostgres$' -count=1 -timeout=240s -v |
+            tee "$RUNNER_TEMP/zchat-e2ee-interop.log"
+          grep -q '^--- PASS: TestE2EERustEpochTransportPostgres (' "$RUNNER_TEMP/zchat-e2ee-interop.log"
+      - name: Check compression without a protocol generator
+        env:
+          PROTOC: /nonexistent/protoc
+        run: |
+          cargo test -p rust-processor --locked --no-default-features --features compression
+          cargo check -p rust-processor --locked --no-default-features
+      - name: Install the Rust advisory checker
+        run: cargo install cargo-audit --version 0.22.2 --locked
+      - name: Check the Rust advisory reporting policy
+        run: python3 -B scripts/check-rust-audit.test.py
+      - name: Report known Rust vulnerabilities as warnings
+        # Findings warn; a failed scanner/database/report still fails CI.
+        # Plain cargo audit remains strict for release checks.
+        run: python3 -B scripts/check-rust-audit.py
+      - name: Check lockfile drift
+        run: git diff --exit-code -- Cargo.lock
+
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - name: Bundle the shared frontend
+        run: |
+          npm ci
+          npm run build:desktop
+          npm run test:desktop
+      - name: Build the Windows desktop shell
+        run: cargo build -p zchat-desktop --locked
+      - name: Check native transport boundaries
+        run: cargo test -p zchat-desktop --locked
+      - name: Check the Windows desktop with Clippy
+        run: cargo clippy -p zchat-desktop --locked --all-targets -- -D warnings
+      - name: Install the opt-in desktop protocol generator
+        run: choco install protoc --yes --no-progress
+      - name: Test native ciphertext HTTP, cache and private photo preparation
+        run: |
+          cargo test -p rust-processor --locked --no-default-features --features "e2ee,compression" --lib -- blob_http attachment_download owner_tests encryption::protected:: saved_attachment_download_plan_keeps file_ack file_status photo_preparation photo_input_tests attachment_input_state accepted_spool_removal_preserves pending_attachments_restore
+      - name: Test experimental desktop session ownership
+        run: cargo test -p zchat-desktop --locked --all-features
+      - name: Check the experimental desktop with Clippy
+        run: cargo clippy -p zchat-desktop --locked --all-features --all-targets -- -D warnings
+      - name: Test native image codecs
+        run: cargo test -p rust-processor --locked --no-default-features --features compression
+      - name: Verify Windows dependency notices
+        run: |
+          npm run licenses:desktop
+          git diff --exit-code -- licenses/native
+          npm run licenses:desktop:e2ee
+      - name: Check lockfile drift
+        run: git diff --exit-code -- Cargo.lock

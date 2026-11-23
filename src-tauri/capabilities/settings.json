@@ -1,0 +1,6 @@
+{
+  "identifier": "server-settings",
+  "description": "Only the bundled settings window may change the server.",
+  "windows": ["settings"],
+  "permissions": ["allow-get-config", "allow-set-server-url", "allow-reset-server-url", "allow-close-settings-window"]
+}

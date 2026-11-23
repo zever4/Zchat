@@ -1,0 +1,19 @@
+rule_files: [alerts.yml]
+evaluation_interval: 5s
+tests:
+  - interval: 5s
+    input_series:
+      - series: 'websocket_message_results_total{job="zchat-backend",result="timeout"}'
+        values: '0+1x24 24+0x48'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: ZchatMessagePersistenceFailures
+        exp_alerts: []
+      - eval_time: 1m5s
+        alertname: ZchatMessagePersistenceFailures
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations: {summary: "Chat message persistence is failing or timing out"}
+      - eval_time: 5m
+        alertname: ZchatMessagePersistenceFailures
+        exp_alerts: []

@@ -1,0 +1,81 @@
+/* Bundled desktop only: browser assets and layout are unchanged. */
+body.desktop-shell {
+  --desktop-titlebar-height: 36px;
+  display: block;
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+  opacity: 1;
+  background: #0a0a0c;
+}
+#desktop-content {
+  height: calc(100vh - var(--desktop-titlebar-height));
+  margin-top: var(--desktop-titlebar-height);
+  overflow: hidden;
+}
+.desktop-login #desktop-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.desktop-offline #desktop-content { padding: 24px; overflow: auto; }
+.desktop-chat .app-layout {
+  height: calc(100vh - var(--desktop-titlebar-height) - var(--call-dock-offset));
+  /* A percentage-height chat in an auto grid row grows with its history. */
+  grid-template-rows: minmax(0, 1fr);
+}
+.desktop-chat :is(.sidebar, .chat-area, .info-panel) { height: 100%; min-height: 0; }
+.desktop-chat .messages { min-height: 0; }
+.desktop-chat :is(.chat-header, .message-input) { flex-shrink: 0; }
+.desktop-chat :is(.modal-overlay, .lightbox-overlay) { top: var(--desktop-titlebar-height); }
+.desktop-chat .call-overlay { top: calc(12px + var(--desktop-titlebar-height)); }
+.desktop-titlebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--desktop-titlebar-height);
+  display: flex;
+  align-items: stretch;
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+  border-bottom: 1px solid #202024;
+  background: #0a0a0c;
+  color: #9a9aa2;
+  font: 12px "Segoe UI", system-ui, sans-serif;
+  user-select: none;
+  z-index: 100001;
+}
+.desktop-titlebar-drag { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; padding: 0 12px; }
+.desktop-titlebar-drag > * { pointer-events: none; }
+.desktop-titlebar-logo {
+  display: grid; place-items: center; width: 18px; height: 18px;
+  border-radius: 5px; background: #e8e8ea; color: #111113; font-weight: 800; font-size: 11px;
+}
+.desktop-titlebar-name { color: #e8e8ea; }
+.desktop-window-status { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #f87171; }
+.desktop-window-button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 46px;
+  width: 46px;
+  height: 35px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #b8b8c0;
+  cursor: default;
+}
+.desktop-window-button:hover { background: #25252b; color: #fff; }
+.desktop-window-button:focus-visible { outline: 2px solid #e8e8ea; outline-offset: -3px; }
+.desktop-window-button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.desktop-server-settings { border-right: 1px solid #202024; }
+.desktop-server-settings svg { stroke-width: 1.7; }
+.desktop-window-close:hover { background: #c42b1c; color: #fff; }
+.desktop-restore-glyph, .desktop-titlebar.is-maximized .desktop-maximize-glyph { display: none; }
+.desktop-titlebar.is-maximized .desktop-restore-glyph { display: block; }

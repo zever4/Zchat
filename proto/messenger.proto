@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package messenger;
+
+option go_package = "./gen/messenger";
+
+service Messenger {
+  // Загрузка ключей (регистрация устройства или пополнение пула)
+  rpc UploadPreKeys(PreKeyBundleUpload) returns (Empty);
+
+  // Получение ключей собеседника. Если device_id не указан — отдаём все устройства.
+  rpc FetchPreKeys(UserId) returns (PreKeyBundles);
+
+  // Отправка зашифрованного blob
+  rpc SendMessage(EncryptedMessage) returns (Empty);
+
+  // Один stream на все чаты пользователя
+  rpc StreamMessages(UserId) returns (stream EncryptedMessage);
+}
+
+message Empty {}
+
+message UserId {
+  string user_id = 1;
+  optional uint32 device_id = 2;  // если не задан — запрос на все девайсы
+}
+
+message PreKeyBundleUpload {
+  string user_id = 1;
+  uint32 device_id = 2;
+  uint32 registration_id = 3;
+  bytes identity_key = 4;
+  SignedPreKey signed_pre_key = 5;
+  repeated OneTimePreKey one_time_pre_keys = 6;
+  repeated KyberPreKey kyber_pre_keys = 7;
+  uint64 signed_pre_key_timestamp = 8;
+}
+
+message SignedPreKey {
+  uint32 key_id = 1;
+  bytes public_key = 2;
+  bytes signature = 3;
+}
+
+message OneTimePreKey {
+  uint32 key_id = 1;
+  bytes public_key = 2;
+}
+
+message KyberPreKey {
+  uint32 key_id = 1;
+  bytes public_key = 2;
+  bytes signature = 3;
+  bool is_last_resort = 4;
+}
+
+// Bundle для ОДНОГО устройства собеседника
+message PreKeyBundle {
+  string user_id = 1;
+  uint32 device_id = 2;
+  uint32 registration_id = 3;
+  bytes identity_key = 4;
+  optional OneTimePreKey one_time_pre_key = 5;  // может быть null, если пул исчерпан
+  SignedPreKey signed_pre_key = 6;
+  optional KyberPreKey kyber_pre_key = 7;       // null, если собеседник не поддерживает PQ
+}
+
+// Все устройства пользователя (ответ на FetchPreKeys)
+message PreKeyBundles {
+  repeated PreKeyBundle bundles = 1;
+}
+
+message EncryptedMessage {
+  string message_id = 1;
+  string sender_id = 2;
+  uint32 sender_device_id = 3;
+  string recipient_id = 4;
+  uint32 recipient_device_id = 5;
+  bytes ciphertext = 6;
+  MessageType message_type = 7;
+  uint64 timestamp = 8;
+  optional uint32 pre_key_id = 9;
+  optional uint32 signed_pre_key_id = 10;
+  optional uint32 kyber_pre_key_id = 11;
+}
+
+enum MessageType {
+  UNKNOWN = 0;
+  PREKEY_SIGNAL_MESSAGE = 1;
+  SIGNAL_MESSAGE = 2;
+  SENDER_KEY_MESSAGE = 3;
+}

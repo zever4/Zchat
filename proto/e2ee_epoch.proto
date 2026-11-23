@@ -1,0 +1,348 @@
+syntax = "proto3";
+
+package zchat.e2ee.v2;
+option go_package = "github.com/zever4/Zchat/gen/e2eev2";
+
+// Shared account/device/public-key types are registry metadata, NOT a v1 message
+// reader. Register this experimental service only behind the explicit E2EE flag.
+import "e2ee.proto";
+
+service Messenger {
+  rpc GetCapabilities(zchat.e2ee.v1.Empty) returns (Capabilities);
+  rpc AcquireBundle(AcquireBundleRequest) returns (AcquiredBundle);
+  rpc SendMessage(SendMessageRequest) returns (SendReceipt);
+  rpc GetPendingMessages(GetPendingMessagesRequest) returns (PendingMessages);
+  rpc AcknowledgeMessages(zchat.e2ee.v1.AcknowledgeMessagesRequest) returns (zchat.e2ee.v1.Empty);
+  rpc GetMessageStatuses(zchat.e2ee.v1.GetMessageStatusesRequest) returns (MessageStatuses);
+  rpc ProposeEpochRecovery(RecoveryCommandRequest) returns (RecoveryRecord);
+  rpc DecideEpochRecovery(RecoveryCommandRequest) returns (RecoveryRecord);
+  rpc GetEpochRecovery(GetEpochRecoveryRequest) returns (RecoveryRecord);
+  rpc GetPendingEpochRecoveries(GetPendingEpochRecoveriesRequest) returns (PendingEpochRecoveries);
+  rpc GetConversationEpochs(GetConversationEpochsRequest) returns (ConversationEpochs);
+  // Metadata only. Neither call accepts keys, a Signal envelope or a body.
+  rpc ReserveBlob(BlobLeaseRequest) returns (BlobLease);
+  rpc ObserveBlob(BlobLeaseRequest) returns (BlobLease);
+  // Recipient saved the file, independently of descriptor/message ACK.
+  rpc AcknowledgeFiles(AcknowledgeFilesRequest) returns (FileAcknowledgements);
+  rpc GetFileStatuses(GetFileStatusesRequest) returns (FileStatuses);
+}
+
+message BlobLeaseRequest {
+  zchat.e2ee.v1.ClientContext context = 1; // Exactly2, current authenticated device.
+  string message_id = 2;
+  string conversation_id = 3;
+  optional uint64 crypto_epoch = 4;
+  zchat.e2ee.v1.DeviceRef sender = 5;
+  zchat.e2ee.v1.DeviceRef recipient = 6;
+  BlobRef blob = 7;
+  string operation_id = 8; // Persist before Reserve; exact retries never change it.
+  uint64 expected_revision = 9;
+  string expected_attempt_id = 10; // Empty iff expected_revision=0.
+}
+
+enum BlobLeaseState {
+  BLOB_LEASE_STATE_UNSPECIFIED = 0;
+  BLOB_LEASE_STATE_RESERVED = 1;
+  BLOB_LEASE_STATE_WRITING = 2;
+  BLOB_LEASE_STATE_READY = 3;
+  BLOB_LEASE_STATE_DELETING = 4;
+  BLOB_LEASE_STATE_RECLAIMED = 5;
+  BLOB_LEASE_STATE_LINKED = 6; // Metadata observation, never a Send receipt.
+}
+message BlobLease {
+  string message_id = 1;
+  string operation_id = 2;
+  string attempt_id = 3;
+  uint64 revision = 4;
+  int64 reserved_at_unix_ms = 5;
+  int64 expires_at_unix_ms = 6;
+  int64 observed_at_unix_ms = 7;
+  BlobLeaseState state = 8;
+  bool expired = 9; // DB clock after locks; not a claim about message delivery.
+}
+enum BlobFailureReason {
+  BLOB_FAILURE_REASON_UNSPECIFIED = 0;
+  BLOB_FAILURE_REASON_OPERATION_NOT_OBSERVED = 1;
+  BLOB_FAILURE_REASON_CAS_CHANGED = 2;
+  BLOB_FAILURE_REASON_ACTIVE_LEASE = 3;
+  BLOB_FAILURE_REASON_BINDING_CONFLICT = 4;
+  BLOB_FAILURE_REASON_CAPACITY = 5;
+  BLOB_FAILURE_REASON_STORAGE_UNAVAILABLE = 6;
+}
+// Only ObserveBlob may report OPERATION_NOT_OBSERVED, after an authorized read
+// transaction COMMITTED. This says nothing about Send/receipt/unsent, never
+// authorizes a new message/key/session, and does not guarantee Reserve succeeds.
+message BlobFailure {
+  BlobFailureReason reason = 1;
+  BlobLeaseRequest request = 2; // Exact binding to the actual failed RPC request.
+}
+
+message Capabilities {
+  uint32 protocol_version = 1; // Exactly2; registry metadata remains a separate API.
+  zchat.e2ee.v1.Limits limits = 2;
+  bool messaging_available = 3; // False until native/UI/end-to-end acceptance.
+  bool recovery_available = 4;  // False until durable native recovery is integrated.
+  repeated zchat.e2ee.v1.CryptoSuite crypto_suites = 5;
+  uint32 max_active_devices = 6;
+}
+
+message Envelope {
+  uint32 protocol_version = 1; // 2=text/control without blob; 3=attachment with blob.
+  zchat.e2ee.v1.CryptoSuite crypto_suite = 2;
+  string message_id = 3;
+  string conversation_id = 4;
+  zchat.e2ee.v1.DeviceRef sender = 5;
+  zchat.e2ee.v1.DeviceRef recipient = 6;
+  zchat.e2ee.v1.CiphertextType message_type = 7;
+  bytes ciphertext = 8;
+  optional uint64 crypto_epoch = 9; // REQUIRED presence, 0..INT64_MAX; first epoch=0.
+  BlobRef blob = 10; // REQUIRED for3, forbidden for2; included in canonical digest.
+}
+
+// Public ciphertext identity only, never the private descriptor/key or a URL.
+// Lease/attempt/operation/revision are mutable upload state and MUST NOT appear
+// here: exact reupload cannot change the immutable Signal envelope/digest.
+message BlobRef {
+  uint32 format_version = 1; // Exactly1; critical extensions require a new format.
+  string blob_id = 2; // Canonical lowercase UUIDv4.
+  uint64 ciphertext_bytes = 3; // 37..52428836, including the native format1 frame.
+  bytes sha256 = 4; // Exactly32 bytes over the complete ciphertext blob.
+}
+
+// Public metadata only. Neither shape nor HTTP200 proves a saved file; native
+// must verify and COMMIT ciphertext cache before authenticated dispatch.
+// Acknowledgement records a statement, independently of physical accepted-file GC.
+message FileAcknowledgement {
+  zchat.e2ee.v1.EpochSendBinding binding = 1; // Exactly attachment3, full route/digest.
+  BlobRef blob = 2; // Exact immutable accepted ref; no upload attempt/operation.
+}
+message AcknowledgeFilesRequest {
+  zchat.e2ee.v1.ClientContext context = 1; // Exactly2, current recipient generation.
+  repeated FileAcknowledgement files = 2; // 1..32, unique message UUIDs, one recipient.
+}
+message FileAcknowledgementReceipt {
+  FileAcknowledgement acknowledgement = 1; // Exact request item, including old epoch.
+  int64 acknowledged_at_unix_ms = 2; // Original server COMMIT fact, exact replay.
+}
+message FileAcknowledgements {
+  repeated FileAcknowledgementReceipt files = 1; // All-or-none, same order as request.
+}
+
+// Sender-only metadata query, independently polled after descriptor/message ACK.
+// A reference is NOT a cache proof, download capability or upload selector.
+// The authenticated RPC shares the existing device/channel metadata boundary.
+message FileStatusReference {
+  zchat.e2ee.v1.EpochSendBinding binding = 1; // Exact accepted attachment3 route/digest.
+  BlobRef blob = 2;
+}
+message GetFileStatusesRequest {
+  zchat.e2ee.v1.ClientContext context = 1; // Exactly2, current SENDER generation.
+  repeated FileStatusReference files = 2; // 1..32 unique UUIDs, one sender, any peers.
+}
+message FileStatus {
+  uint32 format_version = 1; // Exactly1; new critical semantics require a new version.
+  FileStatusReference reference = 2; // Exact request item, including old epoch.
+  SendReceipt receipt = 3; // Original Send COMMIT; no receipt for Ready-only data.
+  int64 observed_at_unix_ms = 4; // DB clock after locks, never the client's clock.
+  int64 expires_at_unix_ms = 5; // Original Send stored_at +720h; never extended.
+  optional int64 acknowledged_at_unix_ms = 6; // Immutable first FILEACK, NOT descriptor ACK.
+  optional int64 recipient_replaced_at_unix_ms = 7; // Intended generation's retirement.
+  // Expired iff observed_at >= expires_at in THIS authenticated observation.
+  // ACK/replacement/deadline coexist; missing optional facts are not absence proofs.
+  // No filesystem access, physical deletion or availability claim in format1.
+}
+message FileStatuses {
+  repeated FileStatus files = 1; // All-or-none, same order as request.
+}
+
+message SendMessageRequest {
+  zchat.e2ee.v1.ClientContext context = 1; // protocol_version=2.
+  Envelope envelope = 2;
+}
+
+enum BlobSendFailureReason {
+  BLOB_SEND_FAILURE_REASON_UNSPECIFIED = 0;
+  BLOB_SEND_FAILURE_REASON_NOT_READY = 1;
+  BLOB_SEND_FAILURE_REASON_LEASE_EXPIRED = 2;
+}
+// Only a validated attachment Send may carry this compact exact binding. The
+// digest includes BlobRef and Signal ciphertext; neither is echoed in errors.
+// Point-in-time failure, NOT a receipt, signed unsent fence or renewal grant.
+// A concurrent/lost Send may still commit. Retry Send first after restart;
+// Observe/Reserve and fresh local lifecycle gates control any exact reupload.
+message BlobSendFailure {
+  BlobSendFailureReason reason = 1;
+  zchat.e2ee.v1.EpochSendBinding binding = 2;
+}
+
+message SendReceipt {
+  string message_id = 1;
+  bytes envelope_digest = 2; // SHA256 of canonical envelope.v2 or .v3 per envelope.
+  int64 stored_at_unix_ms = 3;
+  int64 expires_at_unix_ms = 4;
+  optional uint64 crypto_epoch = 5; // Required; exact replay preserves epoch/TTL.
+}
+
+// Authenticated plaintext; Go never receives it in the actual messaging path.
+message EncryptedPayload {
+  // Exactly2 for text/confirmation, exactly3 for attachment. Older readers must
+  // reject attachments rather than silently discarding a critical unknown field.
+  uint32 format_version = 1;
+  string message_id = 2;
+  string conversation_id = 3;
+  zchat.e2ee.v1.DeviceRef sender = 4;
+  zchat.e2ee.v1.DeviceRef recipient = 5;
+  int64 created_at_unix_ms = 6;
+  oneof content {
+    zchat.e2ee.v1.TextMessage text = 7;
+    SessionConfirmation session_confirmation = 8;
+    AttachmentMessage attachment = 10;
+  }
+  optional uint64 crypto_epoch = 9; // Required and equal to Envelope.crypto_epoch.
+}
+
+enum AttachmentKind {
+  ATTACHMENT_KIND_UNSPECIFIED = 0;
+  ATTACHMENT_KIND_PHOTO = 1;
+  ATTACHMENT_KIND_FILE = 2;
+  ATTACHMENT_KIND_VOICE = 3;
+}
+
+// PRIVATE authenticated Signal plaintext only. Never an upload request, server
+// routing reference, log message or renderer DTO. One attachment per message.
+message AttachmentMessage {
+  uint32 format_version = 1; // Exactly1; critical changes require a new version.
+  string blob_id = 2; // Canonical UUIDv4, never a URI/path.
+  AttachmentKind kind = 3;
+  // Secret73byte descriptor from native attachment format1, including file key.
+  bytes private_descriptor = 4;
+  string filename = 5; // Nonempty UTF8 basename, <=255bytes; NOT a filesystem path.
+  string mime_type = 6; // Canonical allowlist by kind; files application/octet-stream.
+  string caption = 7; // Optional user text, <=2000 UTF8bytes.
+  // REQUIRED presence for photo, absent for file/voice. A peer's assertion, not
+  // proof that its encrypted file actually contains no EXIF/GPS.
+  optional bool photo_metadata_stripped = 8;
+}
+
+message SessionConfirmation {
+  string in_reply_to_message_id = 1;
+  optional uint64 crypto_epoch = 2; // Required and equal to its payload/envelope.
+}
+
+message AcquireBundleRequest {
+  zchat.e2ee.v1.ClientContext context = 1; // protocol_version=2.
+  string conversation_id = 2;
+  string acquisition_id = 3;
+  zchat.e2ee.v1.DeviceRef expected_peer = 4;
+  optional uint64 crypto_epoch = 5; // Required; durable acquisition never crosses epochs.
+}
+
+// Only an exact authorized Acquire replay confirmed expired by PostgreSQL may
+// carry this FailedPrecondition detail, after its read transaction commits.
+// Not a local-clock signal, session reset or permission to cross crypto epochs.
+message AcquisitionExpiredFailure {
+  AcquireBundleRequest request = 1; // Required, exact including context/peer/epoch.
+}
+
+message AcquiredBundle {
+  string acquisition_id = 1;
+  string conversation_id = 2;
+  zchat.e2ee.v1.Device device = 3;
+  zchat.e2ee.v1.SignedPreKey signed_pre_key = 4;
+  zchat.e2ee.v1.OneTimePreKey one_time_pre_key = 5; // Optional EC exhaustion.
+  zchat.e2ee.v1.KyberPreKey kyber_pre_key = 6; // Required PQ; may be last-resort.
+  int64 not_after_unix_ms = 7; // Exclusive bootstrap lease, NOT a key-retention TTL.
+  optional uint64 crypto_epoch = 8; // Required and equal to the retained request.
+  uint32 protocol_version = 9; // Exactly 2.
+}
+
+message GetPendingMessagesRequest { zchat.e2ee.v1.ClientContext context = 1; }
+message Delivery {
+  int64 sequence = 1;
+  Envelope envelope = 2;
+  int64 expires_at_unix_ms = 3;
+  bytes envelope_digest = 4;
+}
+message PendingMessages { repeated Delivery messages = 1; }
+message MessageStatus {
+  SendReceipt receipt = 1;
+  zchat.e2ee.v1.MessageState state = 2;
+  int64 observed_at_unix_ms = 3;
+}
+message MessageStatuses { repeated MessageStatus messages = 1; }
+
+message RecoveryCommandRequest {
+  zchat.e2ee.v1.ClientContext context = 1; // Exactly2, matches the authenticated device.
+  zchat.e2ee.v1.SignedRecoveryControl command = 2;
+}
+message GetEpochRecoveryRequest {
+  zchat.e2ee.v1.ClientContext context = 1;
+  string conversation_id = 2;
+  string proposal_id = 3;
+}
+message RecoveryRecord {
+  zchat.e2ee.v1.RecoveryOutcome outcome = 1;
+  int64 created_at_unix_ms = 2;
+  int64 expires_at_unix_ms = 3;
+  optional int64 resolved_at_unix_ms = 4;
+}
+message GetPendingEpochRecoveriesRequest {
+  zchat.e2ee.v1.ClientContext context = 1;
+  string after_conversation_id = 2; // Empty starts/wraps; UUID keyset, not an ACK.
+  uint32 limit = 3; // 1..32.
+}
+// Advisory discovery only: fetch the exact record before displaying a decision.
+// Empty/omitted/stale pages never authorize unfreeze, reset or scope activation.
+message PendingRecoveryReference {
+  string conversation_id = 1;
+  string proposal_id = 2;
+  uint64 expected_epoch = 3;
+  uint64 expected_revision = 4;
+  bool initiated_by_own_device = 5;
+  int64 created_at_unix_ms = 6;
+  int64 expires_at_unix_ms = 7;
+}
+message PendingEpochRecoveries {
+  repeated PendingRecoveryReference proposals = 1;
+  string next_conversation_id = 2; // Empty on final page; next polling cycle wraps.
+}
+message GetConversationEpochsRequest {
+  zchat.e2ee.v1.ClientContext context = 1;
+  string conversation_id = 2;
+  optional uint64 after_epoch = 3; // Absent includes initial0.
+  uint32 limit = 4; // 1..32.
+}
+message EpochRecord {
+  optional uint64 epoch = 1;
+  optional uint64 revision = 2;
+  bool sealed = 3;
+  string created_by_proposal_id = 4;
+  string sealed_by_proposal_id = 5;
+  zchat.e2ee.v1.DeviceRef bootstrap_device = 6; // Absent for initial0.
+  int64 created_at_unix_ms = 7;
+  optional int64 sealed_at_unix_ms = 8;
+}
+message ConversationEpochs {
+  uint32 protocol_version = 1;
+  zchat.e2ee.v1.Conversation conversation = 2;
+  optional uint64 active_epoch = 3;
+  optional uint64 epoch_revision = 4;
+  repeated EpochRecord epochs = 5;
+  optional uint64 next_after_epoch = 6;
+  // Metadata is authoritative server observation, NOT a signature/local-COMMIT
+  // proof. Native fetches/verifies every required accepted transition separately.
+}
+
+// Exactly one typed google.rpc.Status detail for a sealed Send. Other errors
+// never synthesize this message. Native matches exact retained Send binding,
+// proposal/acceptance signatures and both pinned identities before settlement.
+message EpochSealedFailure {
+  zchat.e2ee.v1.EpochSealedFence fence = 1;
+  zchat.e2ee.v1.RecoveryOutcome recovery = 2;
+}
+message RecoveryConflict {
+  optional uint64 active_epoch = 1;
+  optional uint64 epoch_revision = 2;
+  string pending_proposal_id = 3;
+  // Advisory conflict, not a terminal decision/fence or permission to reset.
+}

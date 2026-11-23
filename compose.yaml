@@ -1,0 +1,102 @@
+# Local development/demo stack. Every published port is loopback-only.
+# Optional services: --profile redis, compose.calls.yaml or compose.monitoring.yaml.
+services:
+  server:
+    build:
+      context: .
+      target: final
+    ports:
+      - "127.0.0.1:${SERVER_HTTP_PORT:-18081}:8080"
+      - "127.0.0.1:${SERVER_GRPC_PORT:-50052}:50051"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: ${SERVER_HEALTH_START_PERIOD:-90s}
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASS: ${DB_PASS:?Set DB_PASS in .env}
+      DB_NAME: ${DB_NAME:-zchat_db}
+      DB_SSLMODE: disable
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env to a random secret of at least 32 bytes}
+      ENABLE_EXPERIMENTAL_E2EE: ${ENABLE_EXPERIMENTAL_E2EE:-false}
+      ENABLE_EXPERIMENTAL_E2EE_BLOBS: ${ENABLE_EXPERIMENTAL_E2EE_BLOBS:-false}
+      E2EE_BLOB_ROOT: ${E2EE_BLOB_ROOT:-/var/lib/zchat/e2ee-blobs}
+      E2EE_BLOB_TOTAL_GB: ${E2EE_BLOB_TOTAL_GB:-50}
+      E2EE_BLOB_ACCOUNT_GB: ${E2EE_BLOB_ACCOUNT_GB:-10}
+      E2EE_BLOB_TOTAL_CLAIMS: ${E2EE_BLOB_TOTAL_CLAIMS:-50000}
+      E2EE_BLOB_ACCOUNT_CLAIMS: ${E2EE_BLOB_ACCOUNT_CLAIMS:-25000}
+      E2EE_BLOB_TOTAL_ATTEMPTS: ${E2EE_BLOB_TOTAL_ATTEMPTS:-100000}
+      E2EE_BLOB_ACCOUNT_ATTEMPTS: ${E2EE_BLOB_ACCOUNT_ATTEMPTS:-50000}
+      E2EE_BLOB_MAX_ARTIFACTS: ${E2EE_BLOB_MAX_ARTIFACTS:-20000}
+      E2EE_BLOB_STARTUP_VERIFY_GB: ${E2EE_BLOB_STARTUP_VERIFY_GB:-100}
+      E2EE_BLOB_STARTUP_SECONDS: ${E2EE_BLOB_STARTUP_SECONDS:-60}
+      E2EE_REDIS_ADDR: ${E2EE_REDIS_ADDR:-}
+      STORAGE_TOTAL_GB: ${STORAGE_TOTAL_GB:-50}
+      STORAGE_ACCOUNT_GB: ${STORAGE_ACCOUNT_GB:-10}
+      STORAGE_FREE_GB: ${STORAGE_FREE_GB:-1}
+      STORAGE_TOTAL_FILES: ${STORAGE_TOTAL_FILES:-200000}
+      STORAGE_ACCOUNT_FILES: ${STORAGE_ACCOUNT_FILES:-50000}
+      STORAGE_FREE_INODES: ${STORAGE_FREE_INODES:-1024}
+      STORAGE_UPLOADS: ${STORAGE_UPLOADS:-8}
+      STORAGE_ACCOUNT_UPLOADS: ${STORAGE_ACCOUNT_UPLOADS:-2}
+      STORAGE_DOWNLOADS: ${STORAGE_DOWNLOADS:-64}
+      STORAGE_ACCOUNT_DOWNLOADS: ${STORAGE_ACCOUNT_DOWNLOADS:-16}
+    volumes:
+      - uploads-data:/web/uploads
+      - e2ee-blobs-data:/var/lib/zchat/e2ee-blobs
+    depends_on:
+      db:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:alpine@sha256:892bb2152464f0c5d8972593a5f5afaf8054552580b699d95f8ff4af08c2d33d
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${NGINX_PORT:-18080}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      server:
+        condition: service_healthy
+
+  db:
+    image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASS:?Set DB_PASS in .env}
+      POSTGRES_DB: ${DB_NAME:-zchat_db}
+    ports:
+      - "127.0.0.1:${DB_HOST_PORT:-5433}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/18/docker
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${DB_USER:-postgres}", "-d", "${DB_NAME:-zchat_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    # Optional hints only; set E2EE_REDIS_ADDR=redis:6379 to connect E2EE runtime.
+    profiles: [redis]
+    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    ports:
+      - "127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  db-data:
+  redis_data:
+  uploads-data:
+  e2ee-blobs-data:

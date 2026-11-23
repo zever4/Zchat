@@ -1,0 +1,16 @@
+# Diagnostic overlay for the owned zchat-load lab only. No extra published ports.
+services:
+  db:
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track_planning=on
+      - -c
+      - track_io_timing=on
+      - -c
+      - track_wal_io_timing=on
+  server:
+    environment:
+      ENABLE_PPROF: "true"

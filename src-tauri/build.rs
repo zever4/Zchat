@@ -1,0 +1,38 @@
+fn main() {
+    tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
+        tauri_build::AppManifest::new().commands(&[
+            "get_config",
+            "e2ee_session",
+            "e2ee_conversation",
+            "e2ee_send_text",
+            "e2ee_prepare_attachment",
+            "e2ee_attachment_input",
+            "e2ee_download_attachment",
+            "e2ee_local_attachment",
+            "e2ee_read",
+            "e2ee_recovery",
+            "e2ee_setup",
+            "e2ee_retry",
+            "e2ee_replace",
+            "e2ee_status",
+            "e2ee_ack",
+            "e2ee_cancel",
+            "set_server_url",
+            "reset_server_url",
+            "retry_load",
+            "open_settings_window",
+            "close_settings_window",
+            "open_external",
+            "check_server",
+            "cancel_request",
+            "socket_connect",
+            "socket_send",
+            "socket_close",
+            "socket_ack",
+            "prepare_image",
+            "reset_microphone_permission",
+            "window_control",
+        ]),
+    ))
+    .expect("desktop build configuration");
+}

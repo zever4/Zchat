@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Z chat</title>
+    <link rel="stylesheet" href="chat.css?v=82">
+</head>
+<body>
+<div class="app-layout" id="appLayout">
+    <!-- ===== ЛЕВАЯ ПАНЕЛЬ ===== -->
+    <aside class="sidebar">
+        <!-- Профиль текущего пользователя -->
+        <div class="user-profile">
+            <div class="avatar" id="myAvatar" data-ui-click="openProfileModal" style="cursor:pointer" title="Открыть профиль">?</div>
+            <div class="user-info" data-ui-click="openProfileModal" style="cursor:pointer">
+                <span class="username" id="myUsername">...</span>
+                <span class="status-text">online</span>
+            </div>
+            <button class="notif-bell-btn" id="notifBellBtn" data-ui-click="toggleNotifPanel" title="Уведомления">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+                <span class="notif-badge" id="notifBadge" style="display:none">0</span>
+            </button>
+            <button class="logout-btn" id="logoutBtn" title="Выйти">&#x2192;</button>
+        </div>
+
+        <!-- Панель уведомлений -->
+        <div class="notif-panel" id="notifPanel" style="display:none">
+            <div class="notif-panel-header">
+                <span class="notif-panel-title">Уведомления</span>
+                <button class="notif-clear-btn" id="notifClearBtn" data-ui-click="clearAllNotifications" title="Очистить все">Очистить</button>
+            </div>
+            <div class="notif-list" id="notifList">
+                <div class="notif-empty">Нет уведомлений</div>
+            </div>
+        </div>
+
+        <!-- Личные сообщения -->
+        <div class="sidebar-section">
+            <div class="sidebar-section-header">
+                Чаты
+                <div class="chat-actions">
+                    <button class="add-group-btn" data-ui-click="openCreateGroupModal" title="Создать группу">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="8.5" cy="7" r="4"/>
+                            <path d="M20 8v6"/>
+                            <path d="M23 11h-6"/>
+                        </svg>
+                    </button>
+                    <button class="add-friend-btn" data-ui-click="openFriendModal" title="Добавить друга">+</button>
+                </div>
+            </div>
+            <div id="privateChatsList" class="contacts-list">
+                <div class="placeholder-text">Нет диалогов</div>
+            </div>
+        </div>
+
+        <section class="sidebar-section e2ee-dialogs" id="e2eeDialogsSection" hidden>
+            <div class="sidebar-section-header">Защищённые диалоги
+                <button type="button" id="e2eeDialogsRefresh" title="Обновить локальный список">↻</button>
+            </div>
+            <button type="button" id="e2eeArchiveOpen" hidden>Локальный архив</button>
+            <div id="e2eeDialogsList"></div>
+            <div class="e2ee-dialog-pages">
+                <button type="button" id="e2eeDialogsPrevious" disabled aria-label="Предыдущая страница">←</button>
+                <span id="e2eeDialogsCount"></span>
+                <button type="button" id="e2eeDialogsNext" disabled aria-label="Следующая страница">→</button>
+            </div>
+            <p class="e2ee-notice" id="e2eeDialogsNotice" role="status"></p>
+        </section>
+
+        <!-- Запросы в друзья -->
+        <div class="sidebar-section" id="friendRequestsSection" style="display:none">
+            <div class="sidebar-section-header">
+                Запросы в друзья
+                <span class="badge" id="requestCount">0</span>
+            </div>
+            <div id="friendRequestsList"></div>
+        </div>
+    </aside>
+
+    <!-- ===== РЕСАЙЗЕР САЙДБАРА ===== -->
+    <div class="sidebar-resizer" id="sidebarResizer"></div>
+
+    <!-- ===== ПРАВАЯ ЧАСТЬ: ЧАТ ===== -->
+    <main class="chat-area" id="chatArea">
+        <section class="e2ee-view" id="e2eeConversationView" hidden>
+            <div class="e2ee-view-header">
+                <h3 id="e2eeConversationTitle"></h3>
+                <button type="button" id="e2eeViewClose">Закрыть</button>
+            </div>
+            <p id="e2eeConversationState" class="e2ee-notice"></p>
+            <details class="e2ee-recovery" id="e2eeRecoveryPanel" hidden>
+                <summary>Восстановление защищённой сессии</summary>
+                <p class="e2ee-notice" id="e2eeRecoveryStatus" role="status"></p>
+                <div id="e2eeRecoveryProposals"></div>
+                <div class="e2ee-recovery-actions">
+                    <button type="button" id="e2eeRecoveryPropose">Предложить восстановление</button>
+                    <button type="button" id="e2eeRecoveryRefresh">Проверить состояние</button>
+                </div>
+                <fieldset id="e2eeRecoveryConsent" hidden>
+                    <legend>Подтверждение действия</legend>
+                    <p id="e2eeRecoveryPrompt"></p>
+                    <label><input type="checkbox" id="e2eeRecoveryConfirm"> Я понимаю последствия и подтверждаю действие</label>
+                    <div class="e2ee-recovery-actions">
+                        <button type="button" id="e2eeRecoverySubmit" disabled>Подтвердить</button>
+                        <button type="button" id="e2eeRecoveryBack">Не сейчас</button>
+                    </div>
+                </fieldset>
+                <p class="e2ee-notice" id="e2eeRecoveryNotice" role="status" aria-live="polite"></p>
+            </details>
+            <div id="e2eeHistory" class="e2ee-history" aria-label="История защищённой переписки"></div>
+            <div class="e2ee-history-actions">
+                <button type="button" id="e2eeHistoryMore" hidden>Ранние сообщения</button>
+                <button type="button" id="e2eeHistoryRefresh">Обновить историю</button>
+            </div>
+            <p id="e2eeHistoryNotice" class="e2ee-notice" role="status"></p>
+            <details id="e2eePendingAttachments" class="e2ee-pending-attachments" hidden>
+                <summary>Подготовленные вложения</summary>
+                <ul id="e2eePendingAttachmentList"></ul>
+                <p id="e2eePendingAttachmentNotice" class="e2ee-notice" role="status"></p>
+                <button type="button" id="e2eePendingAttachmentMore" hidden>Следующая страница</button>
+            </details>
+            <div class="e2ee-composer">
+                <textarea id="e2eeTextInput" rows="2" maxlength="2000" placeholder="Защищённое сообщение…"
+                    aria-label="Защищённое сообщение" autocomplete="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" disabled></textarea>
+                <button type="button" id="e2eeTextSend" disabled>Отправить</button>
+                <button type="button" id="e2eePhotoPick" disabled hidden>Фото</button>
+                <button type="button" id="e2eeFilePick" disabled hidden>Файл</button>
+                <button type="button" id="e2eeVoiceRecord" disabled hidden>Голосовое</button>
+                <button type="button" id="e2eeVoiceCancel" hidden>Отменить запись</button>
+                <button type="button" id="e2eeDraftClear" hidden>Очистить поле</button>
+            </div>
+            <small id="e2eeTextSize" class="e2ee-notice"></small>
+            <p id="e2eeTextNotice" class="e2ee-notice" role="status"></p>
+            <p id="e2eePhotoNotice" class="e2ee-notice" role="status" hidden></p>
+            <p id="e2eeFileNotice" class="e2ee-notice" role="status" hidden></p>
+        </section>
+        <!-- Шапка чата -->
+        <div class="chat-header">
+            <div class="chat-header-info">
+                <span class="chat-name" id="chatName">Выберите чат</span>
+                <span class="chat-status" id="chatStatus"></span>
+            </div>
+            <div class="chat-header-actions">
+                <button class="info-toggle-btn" id="groupSettingsBtn" data-ui-click="openGroupSettingsModal" title="Настройки группы" style="display:none">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                </button>
+                <button class="info-toggle-btn" id="infoToggleBtn" data-ui-click="toggleInfoPanel" title="Участники чата">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                </button>
+                <button class="info-toggle-btn call-btn" id="audioCallBtn" data-ui-click="initiateCall-audio" title="Позвонить" style="display:none">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.79 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Фон с буквами Z -->
+        <div class="z-bg" id="zBackground"></div>
+
+        <!-- Сообщения -->
+        <div class="messages" id="messages"></div>
+
+        <!-- Индикатор набора текста -->
+        <div class="typing-indicator" id="typingIndicator" style="display:none"></div>
+
+        <!-- Поле ввода -->
+        <div class="message-input">
+            <button id="attachBtn" class="media-btn" title="Прикрепить изображение">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                </svg>
+            </button>
+            <button id="fileBtn" class="media-btn" title="Прикрепить файл">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                </svg>
+            </button>
+            <button id="gifBtn" class="media-btn" title="GIF">GIF</button>
+            <button id="voiceBtn" class="media-btn" title="Голосовое сообщение">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/>
+                </svg>
+            </button>
+            <textarea
+                id="messageInput"
+                name="message"
+                rows="1"
+                placeholder="Написать сообщение..."
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="sentences"
+                spellcheck="true"
+                enterkeyhint="send"
+                data-lpignore="true"
+                data-1p-ignore="true"
+            ></textarea>
+            <button id="sendBtn">Z</button>
+        </div>
+    </main>
+
+    <!-- ===== ПАНЕЛЬ ИНФОРМАЦИИ О ЧАТЕ ===== -->
+    <aside class="info-panel" id="infoPanel">
+        <div class="info-panel-header">
+            <span class="info-panel-title" id="infoPanelTitle">Участники</span>
+            <button class="modal-close" data-ui-click="closeInfoPanel">&times;</button>
+        </div>
+        <div class="info-panel-section">
+            <div class="sidebar-section-header">Участники <span id="memberCount">0</span></div>
+            <div id="membersList" class="members-list"></div>
+        </div>
+    </aside>
+</div>
+
+    <div class="modal-overlay" id="updateShowcaseModal" style="display:none" data-ui-click="closeUpdateShowcaseModal" data-ui-self="true">
+        <div class="update-showcase-modal">
+            <button class="modal-close update-showcase-close" data-ui-click="closeUpdateShowcaseModal">&times;</button>
+
+            <div class="update-showcase-copy">
+                <span class="update-showcase-eyebrow">Новое обновление Zchat</span>
+                <h2 class="update-showcase-title">Чаты стали удобнее</h2>
+                <p class="update-showcase-text">
+                    Добавили быстрые действия по правому клику и превью последних сообщений прямо в списке чатов.
+                </p>
+
+                <div class="update-showcase-list">
+                    <div class="update-showcase-item">
+                        <span class="update-showcase-index">01</span>
+                        <div class="update-showcase-item-copy">
+                            <strong>ПКМ по чату</strong>
+                            <span>Открыть профиль, закрепить чат и заглушить уведомления.</span>
+                        </div>
+                    </div>
+
+                    <div class="update-showcase-item">
+                        <span class="update-showcase-index">02</span>
+                        <div class="update-showcase-item-copy">
+                            <strong>Закрепления и тишина</strong>
+                            <span>Важные диалоги держатся сверху, а ненужные можно быстро приглушить.</span>
+                        </div>
+                    </div>
+
+                    <div class="update-showcase-item">
+                        <span class="update-showcase-index">03</span>
+                        <div class="update-showcase-item-copy">
+                            <strong>Последнее сообщение</strong>
+                            <span>Теперь сразу видно, что написали в чате, не открывая его.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="action-btn primary update-showcase-btn" data-ui-click="closeUpdateShowcaseModal">Понятно</button>
+            </div>
+
+            <div class="update-showcase-stage">
+                <div class="update-demo-window">
+                    <div class="update-demo-header">
+                        <span class="update-demo-dot"></span>
+                        <span class="update-demo-dot"></span>
+                        <span class="update-demo-dot"></span>
+                        <div class="update-demo-caption">Обзор нововведений</div>
+                    </div>
+
+                    <div class="update-demo-body">
+                        <div class="update-demo-chat is-active">
+                            <div class="update-demo-avatar">G</div>
+                            <div class="update-demo-chat-copy">
+                                <div class="update-demo-chat-top">
+                                    <span class="update-demo-chat-name">Gomerz</span>
+                                    <span class="update-demo-pin-badge">
+                                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                                            <path d="M12 16v5M8 3v5l-3 4v2h14v-2l-3-4V3z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </span>
+                                </div>
+                                <div class="update-demo-preview">Созвон в 20:30, не опаздывайте.</div>
+                            </div>
+                        </div>
+
+                        <div class="update-demo-chat">
+                            <div class="update-demo-avatar muted">S</div>
+                            <div class="update-demo-chat-copy">
+                                <div class="update-demo-chat-top">
+                                    <span class="update-demo-chat-name">Samety</span>
+                                    <span class="update-demo-mute-badge">
+                                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                                            <path d="M11 5 6 9H3v6h3l5 4zM16 9l5 5M21 9l-5 5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </span>
+                                </div>
+                                <div class="update-demo-preview quiet">Этот чат заглушен</div>
+                            </div>
+                        </div>
+
+                        <div class="update-demo-menu">
+                            <div class="update-demo-menu-item">Открыть профиль</div>
+                            <div class="update-demo-menu-item">Закрепить чат</div>
+                            <div class="update-demo-menu-item">Заглушить чат</div>
+                        </div>
+
+                        <div class="update-demo-pulse"></div>
+                    </div>
+                </div>
+
+                <div class="update-showcase-hint">Окно показывается один раз после обновления.</div>
+            </div>
+        </div>
+    </div>
+
+    <dialog id="e2eeArchiveDialog" class="e2ee-archive-dialog" aria-labelledby="e2eeArchiveTitle" aria-describedby="e2eeArchiveDescription">
+        <header class="e2ee-archive-header">
+            <h2 id="e2eeArchiveTitle">Локальный архив E2EE</h2>
+            <button type="button" id="e2eeArchiveClose" aria-label="Закрыть архив">✕</button>
+        </header>
+        <p id="e2eeArchiveDescription">Только просмотр истории, сохранённой на этом ПК. Архив не отправляет сообщения и не восстанавливает переписку.</p>
+        <nav class="e2ee-archive-nav" aria-label="Разделы архива">
+            <button type="button" id="e2eeArchiveGenerations">Установки</button>
+            <button type="button" id="e2eeArchiveConversations" disabled>Диалоги</button>
+            <button type="button" id="e2eeArchiveSegments" disabled>Сессии шифрования</button>
+            <button type="button" id="e2eeArchiveAll" disabled>Все сессии</button>
+        </nav>
+        <p id="e2eeArchiveScope" class="e2ee-notice"></p>
+        <h3 id="e2eeArchiveHeading" tabindex="-1">Выберите установку</h3>
+        <div id="e2eeArchiveContent" class="e2ee-archive-content" aria-busy="false"></div>
+        <p id="e2eeArchiveNotice" class="e2ee-notice" role="status" aria-live="polite"></p>
+        <footer class="e2ee-archive-footer">
+            <button type="button" id="e2eeArchiveRefresh">Обновить</button>
+            <span id="e2eeArchiveCount" class="e2ee-notice"></span>
+            <button type="button" id="e2eeArchiveMore" hidden>Следующая страница</button>
+        </footer>
+    </dialog>
+
+    <dialog id="e2eeAttachmentPreview" class="e2ee-attachment-preview" aria-label="Предпросмотр фото">
+        <img id="e2eeAttachmentPreviewImage" alt="Фото из защищённого чата">
+        <button type="button" id="e2eeAttachmentPreviewClose" aria-label="Закрыть предпросмотр" autofocus>✕</button>
+    </dialog>
+    <input type="file" id="e2eeFileInput" hidden>
+    <dialog id="e2eeFileDialog" class="image-send-dialog" aria-labelledby="e2eeFileTitle">
+        <h3 id="e2eeFileTitle">Отправить защищённый файл</h3>
+        <p id="e2eeFileName" class="e2ee-notice"></p>
+        <p id="e2eeFileMetadata" class="e2ee-notice">Содержимое и метаданные файла сохранятся.</p>
+        <label class="image-send-field">Подпись
+            <textarea id="e2eeFileCaption" rows="2" maxlength="2000" autocomplete="off" spellcheck="false" data-lpignore="true"></textarea>
+        </label>
+        <p id="e2eeFileStatus" class="e2ee-notice" role="status"></p>
+        <div class="image-send-actions">
+            <button type="button" id="e2eeFileCancel">Отмена</button>
+            <button type="button" id="e2eeFileSend">Отправить файл</button>
+        </div>
+    </dialog>
+    <input id="e2eePhotoFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/tiff,.jpg,.jpeg,.png,.webp,.gif,.bmp,.tif,.tiff" hidden>
+    <dialog id="e2eePhotoDialog" class="image-send-dialog" aria-labelledby="e2eePhotoTitle">
+        <h3 id="e2eePhotoTitle">Отправить защищённое фото</h3>
+        <p id="e2eePhotoName" class="image-send-name"></p>
+        <label class="image-send-field">Подпись
+            <textarea id="e2eePhotoCaption" rows="2" maxlength="2000" autocomplete="off" spellcheck="false" data-lpignore="true"></textarea>
+        </label>
+        <details id="e2eePhotoSettings">
+            <summary>Сжатие и метаданные · <span id="e2eePhotoSettingsSummary"></span></summary>
+            <label class="image-send-field">Режим
+                <select id="e2eePhotoMode">
+                    <option value="clean">Очистить метаданные, сохранить в PNG</option>
+                    <option value="compress">Очистить метаданные и сжать</option>
+                    <option value="original">Отправить оригинал</option>
+                </select>
+            </label>
+            <label class="image-send-field" id="e2eePhotoQualityField" hidden>Качество <output id="e2eePhotoQualityValue">80 / 100</output>
+                <input id="e2eePhotoQuality" type="range" min="40" max="95" step="5" value="80">
+            </label>
+            <label class="image-send-field" id="e2eePhotoSizeField">Длинная сторона
+                <select id="e2eePhotoSize">
+                    <option value="0">Исходные размеры</option>
+                    <option value="2560">До 2560 px</option>
+                    <option value="1600">До 1600 px</option>
+                </select>
+            </label>
+        </details>
+        <label id="e2eePhotoOriginalField" class="image-send-remember" hidden>
+            <input type="checkbox" id="e2eePhotoOriginal">
+            Я согласен отправить исходный файл. Получатель сможет увидеть его метаданные, включая геолокацию, если она есть.
+        </label>
+        <label id="e2eePhotoRememberField" class="image-send-remember">
+            <input type="checkbox" id="e2eePhotoRemember"> Запомнить параметры для фото до 5 МБ
+        </label>
+        <p id="e2eePhotoStatus" class="e2ee-notice" role="status"></p>
+        <div class="image-send-actions">
+            <button type="button" id="e2eePhotoCancel" class="btn-secondary">Отмена</button>
+            <button type="button" id="e2eePhotoSend" class="btn-primary" disabled>Отправить</button>
+        </div>
+    </dialog>
+
+    <dialog id="imageSendDialog" class="image-send-dialog" aria-labelledby="imageSendTitle">
+        <div class="modal-header">
+            <h3 id="imageSendTitle">Отправить изображение</h3>
+            <button type="button" id="imageSendCancel" class="modal-close" aria-label="Отмена">&times;</button>
+        </div>
+        <p id="imageSendName" class="image-send-name"></p>
+        <p id="imageSendOriginalSize"></p>
+        <label class="image-send-field">Способ отправки
+            <select id="imageSendMode"><option value="original">Оригинал — без изменений</option><option value="compress">Сжать изображение</option></select>
+        </label>
+        <div class="image-send-options">
+            <label class="image-send-field">Качество: <output id="imageSendQualityValue">80 / 100</output>
+                <input id="imageSendQuality" type="range" min="40" max="95" step="5" value="80">
+            </label>
+            <label class="image-send-field">Размеры
+                <select id="imageSendDimensions"><option value="0">Исходные</option><option value="2560">Длинная сторона до 2560 px</option><option value="1600">Длинная сторона до 1600 px</option></select>
+            </label>
+        </div>
+        <p class="image-send-hint">При сжатии формат и метаданные могут измениться. Оригинал сохранит исходные байты; большой файл или неподдерживаемый для просмотра формат будет отправлен как файл.</p>
+        <label class="image-send-remember"><input type="checkbox" id="imageSendRemember"> Запомнить этот выбор для фото до 5 МБ</label>
+        <p class="image-send-hint">Для более крупных фото спросим снова. Сбросить выбор можно в настройках → Мой аккаунт → Отправка фото.</p>
+        <p id="imageSendStatus" role="status" aria-live="polite"></p>
+        <img id="imageSendPreview" class="image-send-preview" alt="Подготовленное изображение" hidden>
+        <div class="image-send-actions">
+            <button type="button" id="imageSendPrepare" class="btn-secondary">Подготовить</button>
+            <button type="button" id="imageSendSubmit" class="btn-primary">Отправить</button>
+        </div>
+    </dialog>
+
+    <!-- Модальное окно поиска друзей -->
+    <div class="modal-overlay" id="friendModal" style="display:none" data-ui-click="closeFriendModal" data-ui-self="true">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Добавить друга</h3>
+                <button class="modal-close" data-ui-click="closeFriendModal">&times;</button>
+            </div>
+            <input type="text" id="friendSearchInput" placeholder="Поиск по имени пользователя..." autocomplete="off">
+            <div id="friendSearchResults"></div>
+            <div class="modal-section" id="modalPendingSection" style="display:none">
+                <h4>Входящие запросы</h4>
+                <div id="modalPendingRequests"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно создания группы -->
+    <div class="modal-overlay" id="createGroupModal" style="display:none" data-ui-click="closeCreateGroupModal" data-ui-self="true">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Создать группу</h3>
+                <button class="modal-close" data-ui-click="closeCreateGroupModal">&times;</button>
+            </div>
+            <div class="profile-field">
+                <label class="profile-label">Название группы</label>
+                <input type="text" id="createGroupNameInput" placeholder="Например: Команда Zchat" maxlength="100" autocomplete="off">
+            </div>
+            <div class="settings-card-row settings-switch-row" style="padding:12px 0 4px">
+                <div class="settings-card-info">
+                    <span class="settings-card-label">Открытая группа</span>
+                    <span class="settings-card-subtitle">По ссылке входят сразу, иначе только по заявке</span>
+                </div>
+                <label class="settings-switch">
+                    <input type="checkbox" id="createGroupPublicToggle" checked>
+                    <span class="settings-slider"></span>
+                </label>
+            </div>
+            <div id="createGroupFeedback" class="settings-error" style="display:none;padding:8px 0 0"></div>
+            <button class="action-btn primary" data-ui-click="submitCreateGroup" style="margin-top:14px;width:100%">Создать</button>
+        </div>
+    </div>
+
+    <!-- Модальное окно профиля -->
+    <div class="modal-overlay" id="profileModal" style="display:none" data-ui-click="closeProfileModal" data-ui-self="true">
+        <div class="modal">
+            <div class="modal-header">
+                <button class="settings-gear-btn" data-ui-click="openSettingsFromProfile" title="Настройки">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                </button>
+                <h3>Профиль</h3>
+                <button class="modal-close" data-ui-click="closeProfileModal">&times;</button>
+            </div>
+            <div class="profile-avatar-section">
+                <div class="profile-avatar-large" id="profileAvatarLarge"></div>
+                <label class="action-btn primary" style="cursor:pointer;display:inline-block">
+                    Загрузить фото
+                    <input type="file" id="avatarFileInput" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none">
+                </label>
+            </div>
+            <div class="profile-field">
+                <label class="profile-label">Имя пользователя</label>
+                <div class="profile-username" id="profileUsername"></div>
+            </div>
+            <div class="profile-field">
+                <label class="profile-label">О себе</label>
+                <textarea id="profileBioInput" maxlength="500" rows="3" placeholder="Расскажите о себе..."></textarea>
+            </div>
+            <button class="action-btn primary" data-ui-click="saveProfile" style="margin-top:12px;width:100%">Сохранить</button>
+        </div>
+    </div>
+
+    <!-- Модальное окно настроек группы -->
+    <div class="modal-overlay" id="groupSettingsModal" style="display:none" data-ui-click="closeGroupSettingsModal" data-ui-self="true">
+        <div class="gs-panel">
+            <!-- Навигация -->
+            <div class="gs-nav">
+                <div class="gs-nav-header">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    <span>Настройки группы</span>
+                </div>
+                <button class="gs-nav-item active" data-group-tab-btn="main" data-ui-click="switchGroupSettingsTab-main">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    Основное
+                </button>
+                <button class="gs-nav-item" data-group-tab-btn="members" data-group-admin-only="true" data-ui-click="switchGroupSettingsTab-members">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    Участники
+                </button>
+                <button class="gs-nav-item" data-group-tab-btn="permissions" data-group-admin-only="true" data-ui-click="switchGroupSettingsTab-permissions">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    Права
+                </button>
+                <button class="gs-nav-item" data-group-tab-btn="invites" data-group-admin-only="true" data-ui-click="switchGroupSettingsTab-invites">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    Приглашения
+                </button>
+                <button class="gs-nav-item" data-group-tab-btn="requests" data-group-admin-only="true" data-ui-click="switchGroupSettingsTab-requests">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                    Заявки
+                </button>
+                <button class="gs-nav-item" data-group-tab-btn="audit" data-group-admin-only="true" data-ui-click="switchGroupSettingsTab-audit">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    Журнал
+                </button>
+                <div class="gs-nav-spacer"></div>
+                <button class="gs-nav-item danger" data-group-tab-btn="danger" data-group-owner-only="true" data-ui-click="switchGroupSettingsTab-danger">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    Удаление
+                </button>
+            </div>
+
+            <!-- Контент -->
+            <div class="gs-content">
+                <button class="gs-close" data-ui-click="closeGroupSettingsModal">&times;</button>
+
+                <!-- Основное -->
+                <div class="gs-page active" data-group-tab="main">
+                    <h2 class="gs-title">Основное</h2>
+                    <p class="gs-subtitle">Название, аватар и тип доступа к группе</p>
+
+                    <div class="gs-card">
+                        <div class="gs-avatar-section">
+                            <div class="profile-avatar-large" id="groupSettingsAvatar">G</div>
+                            <label class="gs-avatar-btn" data-group-admin-only="true">
+                                Загрузить аватар
+                                <input type="file" id="groupAvatarFileInput" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none">
+                            </label>
+                        </div>
+
+                        <div class="gs-field">
+                            <label>Название группы</label>
+                            <input type="text" id="groupSettingsNameInput" maxlength="100" autocomplete="off">
+                        </div>
+
+                        <div class="gs-toggle-row">
+                            <div class="gs-toggle-info">
+                                <span class="gs-toggle-label">Открытая группа</span>
+                                <span class="gs-toggle-hint">Открытая: вход по ссылке сразу, закрытая: только по заявке</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="groupSettingsPublicToggle">
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <button class="gs-save-btn" id="groupSaveBtn" data-ui-click="saveGroupSettings">Сохранить изменения</button>
+                    <div id="groupSettingsFeedback" class="settings-error" style="display:none"></div>
+                </div>
+
+                <!-- Участники -->
+                <div class="gs-page" data-group-tab="members" data-group-admin-only="true">
+                    <h2 class="gs-title">Участники</h2>
+                    <p class="gs-subtitle">Управление участниками и назначение администраторов</p>
+
+                    <div id="groupMembersList" class="gs-members-list"></div>
+                </div>
+
+                <!-- Права -->
+                <div class="gs-page" data-group-tab="permissions" data-group-admin-only="true">
+                    <h2 class="gs-title">Права</h2>
+                    <p class="gs-subtitle">Настройки прав доступа в группе</p>
+
+                    <div class="gs-card">
+                        <div class="gs-toggle-row">
+                            <div class="gs-toggle-info">
+                                <span class="gs-toggle-label">Только админы могут писать</span>
+                                <span class="gs-toggle-hint">Обычные участники не смогут отправлять сообщения в чат</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="groupAdminsOnlyWriteToggle" data-ui-change="toggleAdminsOnlyWrite">
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="gs-toggle-row">
+                            <div class="gs-toggle-info">
+                                <span class="gs-toggle-label">Скрыть список участников</span>
+                                <span class="gs-toggle-hint">Обычные участники не увидят список людей в группе</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="groupHideMembersToggle" data-ui-change="toggleHideMembersList">
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="gs-toggle-row">
+                            <div class="gs-toggle-info">
+                                <span class="gs-toggle-label">Анонимный режим</span>
+                                <span class="gs-toggle-hint">Сообщения отображаются от лица группы. Отправленные в этом режиме сохранят анонимность после его выключения.</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="groupAnonymousModeToggle" data-ui-change="toggleAnonymousMode">
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div id="groupPermsFeedback" class="settings-error" style="display:none"></div>
+                </div>
+
+                <!-- Приглашения -->
+                <div class="gs-page" data-group-tab="invites" data-group-admin-only="true">
+                    <h2 class="gs-title">Ссылки-приглашения</h2>
+                    <p class="gs-subtitle">Создание, управление и удаление пригласительных ссылок</p>
+
+                    <button class="gs-action-btn" id="groupCreateInviteBtn" data-ui-click="createGroupInviteLink">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Создать новую ссылку
+                    </button>
+
+                    <div id="groupInvitesList" class="group-invites-list"></div>
+                </div>
+
+                <!-- Заявки -->
+                <div class="gs-page" data-group-tab="requests" data-group-admin-only="true">
+                    <h2 class="gs-title">Заявки на вступление</h2>
+                    <p class="gs-subtitle">Появляются для закрытых групп</p>
+
+                    <div id="groupJoinRequestsList" class="group-requests-list"></div>
+                </div>
+
+                <!-- Журнал -->
+                <div class="gs-page" data-group-tab="audit" data-group-admin-only="true">
+                    <h2 class="gs-title">Журнал аудита</h2>
+                    <p class="gs-subtitle">История действий участников группы</p>
+
+                    <div id="groupAuditLogList" class="group-audit-list"></div>
+                </div>
+
+                <!-- Удаление -->
+                <div class="gs-page" data-group-tab="danger" data-group-owner-only="true">
+                    <h2 class="gs-title">Опасная зона</h2>
+                    <p class="gs-subtitle">Удаление группы доступно только создателю. Это действие необратимо.</p>
+
+                    <div class="gs-danger-card">
+                        <div class="gs-danger-info">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            <div>
+                                <strong>Удалить группу навсегда</strong>
+                                <span>Все сообщения, участники и настройки будут удалены безвозвратно</span>
+                            </div>
+                        </div>
+                        <button class="gs-delete-btn" id="groupDeleteBtn" data-ui-click="deleteCurrentGroup">Удалить группу</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно профиля другого пользователя -->
+    <div class="modal-overlay" id="userProfileModal" style="display:none" data-ui-click="closeUserProfileModal" data-ui-self="true">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Профиль пользователя</h3>
+                <button class="modal-close" data-ui-click="closeUserProfileModal">&times;</button>
+            </div>
+            <div class="profile-avatar-section">
+                <div class="profile-avatar-large" id="userProfileAvatar"></div>
+            </div>
+            <div class="profile-field">
+                <label class="profile-label">Имя пользователя</label>
+                <div class="profile-username" id="userProfileUsername"></div>
+            </div>
+            <div class="profile-field">
+                <label class="profile-label">О себе</label>
+                <div id="userProfileBio" style="font-size:13.5px;color:var(--text-secondary);min-height:20px"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно настроек -->
+    <div class="modal-overlay" id="settingsModal" style="display:none" data-ui-click="closeSettingsModal" data-ui-self="true">
+        <div class="settings-panel">
+            <!-- Сайдбар навигация -->
+            <div class="settings-nav">
+                <div class="settings-nav-header">
+                    <button class="settings-back-btn" data-ui-click="openProfileFromSettings" title="Назад к профилю">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/>
+                        </svg>
+                    </button>
+                    <span>Настройки</span>
+                </div>
+                <button class="settings-nav-item active" data-tab="account" data-ui-click="switchSettingsTab-account">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    Мой аккаунт
+                </button>
+                <button class="settings-nav-item" data-tab="notifications" data-ui-click="switchSettingsTab-notifications">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    Уведомления
+                </button>
+                <button class="settings-nav-item" data-tab="microphone" data-ui-click="switchSettingsTab-microphone">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>
+                    Микрофон
+                </button>
+                <button class="settings-nav-item" data-tab="screen" data-ui-click="switchSettingsTab-screen">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    Демонстрация
+                </button>
+                <button class="settings-nav-item" data-tab="privacy" data-ui-click="switchSettingsTab-privacy">
+                    <svg class="privacy-nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3L5 6.5V12c0 4.5 3 7.4 7 9 4-1.6 7-4.5 7-9V6.5L12 3z"/><path d="M9.5 12.5l2 2 3.5-3.5"/></svg>
+                    <span class="settings-nav-label">Конфиденциальность</span>
+                </button>
+                <button class="settings-nav-item" data-tab="security" data-ui-click="switchSettingsTab-security">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    Безопасность
+                </button>
+                <button class="settings-nav-item" data-tab="sessions" data-ui-click="switchSettingsTab-sessions">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    Сессии
+                </button>
+            </div>
+
+            <!-- Контент -->
+            <div class="settings-content">
+                <button class="settings-panel-close" data-ui-click="closeSettingsModal">&times;</button>
+
+                <!-- Аккаунт -->
+                <div class="settings-tab-content active" id="settingsTabAccount">
+                    <h2 class="settings-page-title">Мой аккаунт</h2>
+
+                    <div class="settings-card">
+                        <div class="settings-card-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Имя пользователя</span>
+                                <span class="settings-card-value" id="settingsUsername">—</span>
+                            </div>
+                        </div>
+                        <div class="settings-card-divider"></div>
+                        <div class="settings-card-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Электронная почта</span>
+                                <span class="settings-card-value" id="settingsEmail">—</span>
+                            </div>
+                        </div>
+                        <div class="settings-card-divider"></div>
+                        <div class="settings-card-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Пароль</span>
+                                <span class="settings-card-value">••••••••••</span>
+                            </div>
+                            <button class="settings-card-btn" data-ui-click="switchSettingsTab-security">Изменить</button>
+                        </div>
+                    </div>
+                    <div class="settings-card" id="desktopImageSettings" hidden>
+                        <div class="settings-card-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Отправка фото</span>
+                                <span class="settings-card-subtitle" id="imagePreferenceStatus"></span>
+                            </div>
+                            <button type="button" class="settings-card-btn" id="resetImagePreference">Спрашивать каждый раз</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Уведомления -->
+                <div class="settings-tab-content" id="settingsTabNotifications">
+                    <h2 class="settings-page-title">Уведомления</h2>
+
+                    <div class="settings-card">
+                        <div class="settings-card-row settings-switch-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">В приложении</span>
+                                <span class="settings-card-subtitle">Показывать уведомления в Zchat</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="settingsNotifEnabled">
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-card-divider"></div>
+                        <div class="settings-card-row settings-switch-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Звук</span>
+                                <span class="settings-card-subtitle">Сообщения и входящие звонки</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="settingsNotifSound">
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-card-divider"></div>
+                        <div class="settings-card-row settings-switch-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Desktop</span>
+                                <span class="settings-card-subtitle">Уведомления браузера</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="settingsNotifDesktop">
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-card-divider"></div>
+                        <div class="settings-card-row settings-switch-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Не беспокоить</span>
+                                <span class="settings-card-subtitle">Отключать уведомления по времени</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="settingsDndEnabled">
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-card-divider"></div>
+                        <div class="settings-card-row settings-time-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Период DND</span>
+                                <span class="settings-card-subtitle">Например: с 23:00 до 08:00</span>
+                            </div>
+                            <div class="settings-inline-fields">
+                                <select id="settingsDndFrom" class="settings-select"></select>
+                                <span class="settings-inline-sep">—</span>
+                                <select id="settingsDndTo" class="settings-select"></select>
+                            </div>
+                        </div>
+                        <div id="settingsNotifError" class="settings-error" style="display:none"></div>
+                        <div id="settingsNotifSuccess" class="settings-success" style="display:none"></div>
+                        <button class="settings-save-btn" data-ui-click="saveSettingsPreferences-notifications">Сохранить</button>
+                    </div>
+                    <div class="settings-card settings-notification-sounds">
+                        <p class="settings-card-subtitle">Свои звуки применяются сразу и сохраняются на этом устройстве.</p>
+                        <div data-notification-sound="message">
+                            <h3 class="settings-card-label">Новое сообщение</h3>
+                            <p class="settings-card-subtitle" data-sound-name>Стандартный</p>
+                            <input type="file" data-sound-file accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.webm,.flac" hidden>
+                            <div class="settings-sound-buttons">
+                                <button type="button" class="settings-card-btn" data-sound-pick>Выбрать файл…</button>
+                                <button type="button" class="settings-card-btn" data-sound-preview>Прослушать</button>
+                                <button type="button" class="settings-card-btn" data-sound-reset disabled>По умолчанию</button>
+                            </div>
+                            <p class="settings-card-subtitle" data-sound-status role="status"></p>
+                        </div>
+                        <div class="settings-card-divider"></div>
+                        <div data-notification-sound="ring">
+                            <h3 class="settings-card-label">Входящий звонок</h3>
+                            <p class="settings-card-subtitle" data-sound-name>Стандартный</p>
+                            <input type="file" data-sound-file accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.webm,.flac" hidden>
+                            <div class="settings-sound-buttons">
+                                <button type="button" class="settings-card-btn" data-sound-pick>Выбрать файл…</button>
+                                <button type="button" class="settings-card-btn" data-sound-preview>Прослушать</button>
+                                <button type="button" class="settings-card-btn" data-sound-reset disabled>По умолчанию</button>
+                            </div>
+                            <p class="settings-card-subtitle" data-sound-status role="status"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Микрофон -->
+                <div class="settings-tab-content" id="settingsTabMicrophone">
+                    <h2 class="settings-page-title">Микрофон</h2>
+
+                    <div class="settings-card">
+                        <div class="settings-card-row settings-time-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Режим передачи</span>
+                                <span class="settings-card-subtitle">Обычный режим переключает микрофон кнопкой, режим рации включает его только пока вы удерживаете кнопку в звонке</span>
+                            </div>
+                            <select id="settingsMicrophoneMode" class="settings-select">
+                                <option value="toggle">Обычный</option>
+                                <option value="radio">Рация</option>
+                            </select>
+                        </div>
+                        <div class="settings-card-divider"></div>
+                        <div class="settings-card-row settings-time-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Клавиша рации</span>
+                                <span class="settings-card-subtitle" id="settingsMicrophonePttKeyHint">Клавиша не назначена. Можно продолжать удерживать кнопку микрофона мышью.</span>
+                            </div>
+                            <div class="settings-keybind-actions">
+                                <input type="hidden" id="settingsMicrophonePttKey" value="">
+                                <button type="button" class="settings-keybind-btn" id="settingsMicrophonePttKeyBtn" data-ui-click="toggleMicrophonePttKeyCapture">Назначить</button>
+                                <button type="button" class="settings-card-btn" data-ui-click="clearMicrophonePttKey">Очистить</button>
+                            </div>
+                        </div>
+                        <div class="settings-card-divider"></div>
+                        <div class="settings-card-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Подсказка</span>
+                                <span class="settings-card-subtitle">В режиме рации микрофон можно держать кнопкой мыши или назначенной клавишей. При нажатии и отпускании проигрывается тихий сигнал, чтобы было понятно, когда передача активна</span>
+                            </div>
+                        </div>
+                        <div class="settings-card-divider" id="desktopMicrophoneDivider" hidden></div>
+                        <div class="settings-card-row" id="desktopMicrophonePermission" hidden>
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Доступ к микрофону</span>
+                                <span class="settings-card-subtitle">Если ранее запретили доступ, сбросьте решение и разрешите микрофон при следующем звонке или записи. Страница перезагрузится, вход в аккаунт сохранится. Если доступ запрещён в Windows, включите его в настройках конфиденциальности системы.</span>
+                            </div>
+                            <button type="button" class="settings-card-btn" id="resetMicrophonePermission" data-ui-click="resetDesktopMicrophonePermission">Сбросить и перезагрузить</button>
+                        </div>
+                        <div id="settingsMicrophoneError" class="settings-error" style="display:none"></div>
+                        <div id="settingsMicrophoneSuccess" class="settings-success" style="display:none"></div>
+                        <button class="settings-save-btn" data-ui-click="saveSettingsPreferences-microphone">Сохранить</button>
+                    </div>
+                </div>
+
+                <!-- Демонстрация -->
+                <div class="settings-tab-content" id="settingsTabScreen">
+                    <h2 class="settings-page-title">Демонстрация</h2>
+
+                    <div class="settings-card">
+                        <div class="settings-card-row settings-time-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Разрешение</span>
+                                <span class="settings-card-subtitle">Базовый пресет для показа экрана в звонке</span>
+                            </div>
+                            <select id="settingsScreenShareResolution" class="settings-select">
+                                <option value="720p">1280 × 720</option>
+                                <option value="1080p">1920 × 1080</option>
+                                <option value="1440p">2560 × 1440</option>
+                            </select>
+                        </div>
+                        <div class="settings-card-divider"></div>
+                        <div class="settings-card-row settings-time-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">FPS</span>
+                                <span class="settings-card-subtitle">Меньше FPS для слайдов и кода, больше FPS для динамики</span>
+                            </div>
+                            <select id="settingsScreenShareFPS" class="settings-select">
+                                <option value="10">10 FPS</option>
+                                <option value="15">15 FPS</option>
+                                <option value="30">30 FPS</option>
+                                <option value="60">60 FPS</option>
+                            </select>
+                        </div>
+                        <div class="settings-card-divider"></div>
+                        <div class="settings-card-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Быстрый запуск</span>
+                                <span class="settings-card-subtitle">Эти параметры сразу подставляются в меню демонстрации во время звонка, так что не придётся каждый раз выставлять их заново</span>
+                            </div>
+                        </div>
+                        <div id="settingsScreenError" class="settings-error" style="display:none"></div>
+                        <div id="settingsScreenSuccess" class="settings-success" style="display:none"></div>
+                        <button class="settings-save-btn" data-ui-click="saveSettingsPreferences-screen">Сохранить</button>
+                    </div>
+                </div>
+
+                <!-- Конфиденциальность -->
+                <div class="settings-tab-content" id="settingsTabPrivacy">
+                    <h2 class="settings-page-title">Конфиденциальность</h2>
+
+                    <div class="settings-card">
+                        <div class="settings-card-row settings-switch-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Статус онлайн</span>
+                                <span class="settings-card-subtitle">Показывать ваш статус в интерфейсе</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="settingsPrivacyOnline">
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-card-divider"></div>
+                        <div class="settings-card-row settings-switch-row">
+                            <div class="settings-card-info">
+                                <label class="settings-card-label" for="settingsPrivacyDM">Кто может начинать переписку со мной</label>
+                                <span class="settings-card-subtitle">Существующие диалоги сохраняются. Защищённые чаты доступны только друзьям.</span>
+                            </div>
+                            <select id="settingsPrivacyDM" class="settings-select">
+                                <option value="everyone">Все</option>
+                                <option value="friends" selected>Только друзья</option>
+                                <option value="nobody">Никто</option>
+                            </select>
+                        </div>
+                        <div class="settings-card-divider"></div>
+                        <div class="settings-card-row settings-switch-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Заявки в друзья</span>
+                                <span class="settings-card-subtitle">Разрешать отправку заявок вам</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="settingsPrivacyFriends">
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-card-divider"></div>
+                        <div class="settings-card-row settings-switch-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Email в профиле</span>
+                                <span class="settings-card-subtitle">Показывать email в карточке аккаунта</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="settingsPrivacyEmail">
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                        <div id="settingsPrivacyError" class="settings-error" style="display:none"></div>
+                        <div id="settingsPrivacySuccess" class="settings-success" style="display:none"></div>
+                        <button class="settings-save-btn" data-ui-click="saveSettingsPreferences-privacy">Сохранить</button>
+                    </div>
+                </div>
+
+                <!-- Безопасность -->
+                <div class="settings-tab-content" id="settingsTabSecurity">
+                    <h2 class="settings-page-title">Безопасность</h2>
+
+                    <div class="settings-card" id="desktopE2eeSettings" hidden>
+                        <h3 class="settings-card-title">Ключи E2EE</h3>
+                        <p class="settings-card-subtitle">Ключи для отдельных защищённых диалогов хранятся в этой установке приложения и сохраняются после выхода из аккаунта.</p>
+                        <p id="desktopE2eeStatus" role="status" aria-live="polite"></p>
+                        <button type="button" class="settings-card-btn" id="desktopE2eeArchiveOpen" hidden>Открыть локальный архив</button>
+                        <div id="desktopE2eeError" class="settings-error" hidden></div>
+                        <button type="button" class="settings-save-btn" id="desktopE2eeSetup" hidden>Создать ключи на этом ПК</button>
+                        <button type="button" class="settings-card-btn" id="desktopE2eeRetry" hidden>Повторить проверку</button>
+                        <div id="desktopE2eeReplacement" hidden>
+                            <p id="desktopE2eeTarget"></p>
+                            <p>Замена отключит прежнюю E2EE-установку и закроет связанные защищённые диалоги. Для новой переписки потребуется новый диалог. Сохранённая локальная история останется на том ПК, где её получили; сюда она не переносится. Обычные чаты сохранятся.</p>
+                            <label><input type="checkbox" id="desktopE2eeConfirm"> Понимаю последствия и подтверждаю замену</label>
+                            <label for="desktopE2eePassword">Текущий пароль аккаунта</label>
+                            <input type="password" class="settings-input" id="desktopE2eePassword" autocomplete="off" maxlength="72" spellcheck="false">
+                            <button type="button" class="settings-card-btn" id="desktopE2eeReplace" disabled>Заменить E2EE-установку</button>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3 class="settings-card-title">Смена пароля</h3>
+
+                        <div class="settings-form-field">
+                            <label>Текущий пароль</label>
+                            <input type="password" id="settingsOldPassword" placeholder="Введите текущий пароль" autocomplete="current-password">
+                        </div>
+
+                        <div class="settings-form-field">
+                            <label>Новый пароль</label>
+                            <input type="password" id="settingsNewPassword" placeholder="Минимум 6 символов" autocomplete="new-password">
+                        </div>
+
+                        <div class="settings-form-field">
+                            <label>Подтвердите пароль</label>
+                            <input type="password" id="settingsConfirmPassword" placeholder="Повторите новый пароль" autocomplete="new-password">
+                        </div>
+
+                        <div id="settingsPasswordError" class="settings-error" style="display:none"></div>
+                        <div id="settingsPasswordSuccess" class="settings-success" style="display:none"></div>
+
+                        <button class="settings-save-btn" data-ui-click="changePassword">Сменить пароль</button>
+                    </div>
+                </div>
+
+                <!-- Сессии -->
+                <div class="settings-tab-content" id="settingsTabSessions">
+                    <h2 class="settings-page-title">Сессии</h2>
+
+                    <div class="settings-card">
+                        <h3 class="settings-card-title">Текущая сессия</h3>
+
+                        <div class="settings-card-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Устройство</span>
+                                <span class="settings-card-value" id="settingsSessionDevice">—</span>
+                            </div>
+                        </div>
+                        <div class="settings-card-divider"></div>
+                        <div class="settings-card-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Выдан</span>
+                                <span class="settings-card-value" id="settingsSessionIssued">—</span>
+                            </div>
+                        </div>
+                        <div class="settings-card-divider"></div>
+                        <div class="settings-card-row">
+                            <div class="settings-card-info">
+                                <span class="settings-card-label">Истекает</span>
+                                <span class="settings-card-value" id="settingsSessionExpire">—</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-actions">
+                        <button class="settings-card-btn" data-ui-click="logoutCurrentSession">Выйти с этого устройства</button>
+                        <button class="settings-danger-btn" data-ui-click="logoutAllSessions">Выйти со всех устройств</button>
+                    </div>
+                    <div id="settingsSessionsError" class="settings-error" style="display:none"></div>
+                    <div id="settingsSessionsSuccess" class="settings-success" style="display:none"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Контекстное меню -->
+    <div class="context-menu" id="contextMenu" style="display:none">
+        <div class="context-menu-item" id="ctxEdit" data-ui-click="startEditMessage">Редактировать</div>
+        <div class="context-menu-item danger" id="ctxDelete" data-ui-click="deleteMessage">Удалить</div>
+    </div>
+
+    <div class="context-menu" id="chatListContextMenu" style="display:none">
+        <div class="context-menu-item" id="chatCtxProfile" data-ui-click="openChatContextProfile">Открыть профиль</div>
+        <div class="context-menu-item" id="chatCtxPin" data-ui-click="toggleChatContextPinned">Закрепить чат</div>
+        <div class="context-menu-item" id="chatCtxMute" data-ui-click="toggleChatContextMuted">Заглушить чат</div>
+    </div>
+
+    <!-- ===== ВХОДЯЩИЙ ЗВОНОК ===== -->
+    <div class="modal-overlay" id="incomingCallModal" style="display:none">
+        <div class="modal incoming-call-modal">
+            <div class="call-modal-avatar" id="callModalAvatar"></div>
+            <div class="call-modal-caller" id="callModalCaller"></div>
+            <div class="call-modal-type" id="callModalType"></div>
+            <div class="call-ring-animation">
+                <span class="ring-dot"></span>
+                <span class="ring-dot"></span>
+                <span class="ring-dot"></span>
+            </div>
+            <div class="call-modal-actions">
+                <button class="call-accept-btn" data-ui-click="acceptIncomingCall" title="Принять">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                    </svg>
+                </button>
+                <button class="call-reject-btn" data-ui-click="rejectIncomingCall" title="Отклонить">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== АКТИВНЫЙ ЗВОНОК (ОВЕРЛЕЙ) ===== -->
+    <div class="call-overlay" id="callOverlay" style="display:none">
+        <div class="call-overlay-header">
+            <div class="call-overlay-summary">
+                <span class="call-chat-name" id="callChatName"></span>
+                <div class="call-overlay-meta">
+                    <span id="callConnectionStatus" role="status" aria-live="polite" hidden></span>
+                    <span class="call-duration" id="callDuration">00:00</span>
+                    <span class="call-overlay-meta-sep">•</span>
+                    <span class="call-inline-participants"><span id="callParticipantCountInline">0</span> в звонке</span>
+                </div>
+            </div>
+            <button class="call-overlay-toggle" id="callOverlayToggle" data-ui-click="toggleCallDockDetails" title="Показать участников и предпросмотр">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+                <span id="callOverlayToggleLabel">Панель</span>
+            </button>
+        </div>
+        <div class="call-overlay-body">
+            <div class="call-stage">
+                <div class="call-video-grid" id="callVideoGrid"></div>
+            </div>
+            <aside class="call-sidebar">
+                <div class="call-sidebar-header">
+                    <span class="call-sidebar-title">В звонке</span>
+                    <span class="call-sidebar-count" id="callParticipantCount">0</span>
+                </div>
+                <div class="call-participants-list" id="callParticipantsList"></div>
+            </aside>
+        </div>
+        <div class="call-controls">
+            <button class="call-control-btn" id="callToggleMic" data-ui-click="toggleCallMic" title="Микрофон">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                </svg>
+                <span class="call-control-label" id="callMicLabel">Микрофон</span>
+            </button>
+            <button class="call-control-btn" id="callShareScreen" data-ui-click="toggleScreenSharePanel" title="Параметры демонстрации">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                    <line x1="8" y1="21" x2="16" y2="21"/>
+                    <line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+                <span class="call-control-label" id="callScreenShareLabel">Экран</span>
+            </button>
+            <button class="call-control-btn call-end-btn" id="callEndBtn" data-ui-click="endCall" title="Завершить звонок">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+                <span class="call-control-label">Выйти</span>
+            </button>
+        </div>
+
+        <div class="call-screen-share-panel" id="callScreenSharePanel" style="display:none">
+            <div class="call-screen-share-header">
+                <div class="call-screen-share-title-wrap">
+                    <span class="call-screen-share-title">Демонстрация</span>
+                    <span class="call-screen-share-subtitle" id="callScreenSharePanelStatus">Выберите качество перед запуском</span>
+                </div>
+                <button class="call-screen-share-close" type="button" data-ui-click="closeScreenSharePanel" title="Закрыть">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="call-screen-share-fields">
+                <label class="call-screen-share-field">
+                    <span>Разрешение</span>
+                    <select id="callScreenShareResolution" class="settings-select">
+                        <option value="720p">1280 × 720</option>
+                        <option value="1080p">1920 × 1080</option>
+                        <option value="1440p">2560 × 1440</option>
+                    </select>
+                </label>
+                <label class="call-screen-share-field">
+                    <span>FPS</span>
+                    <select id="callScreenShareFPS" class="settings-select">
+                        <option value="10">10 FPS</option>
+                        <option value="15">15 FPS</option>
+                        <option value="30">30 FPS</option>
+                        <option value="60">60 FPS</option>
+                    </select>
+                </label>
+            </div>
+            <div class="call-screen-share-actions">
+                <button class="call-screen-share-apply" id="callScreenShareApplyBtn" type="button" data-ui-click="submitScreenSharePanel">Начать демонстрацию</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="context-menu call-participant-menu" id="callParticipantMenu" style="display:none">
+        <div class="call-participant-menu-header" id="callParticipantMenuName">Громкость</div>
+        <div class="call-participant-menu-value" id="callParticipantVolumeValue">100%</div>
+        <input type="range" id="callParticipantVolumeSlider" class="call-volume-slider" min="0" max="100" step="5" value="100">
+    </div>
+
+  <script src="chat.js?v=108"></script>
+</body>
+</html>

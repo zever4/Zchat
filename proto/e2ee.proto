@@ -1,0 +1,448 @@
+syntax = "proto3";
+
+package zchat.e2ee.v1;
+
+option go_package = "github.com/zever4/Zchat/gen/e2ee";
+
+// Target API; generating these bindings does not enable the service. The legacy
+// messenger.Messenger prototype is not a compatible implementation of this API.
+service Messenger {
+  rpc GetCapabilities(Empty) returns (Capabilities);
+  rpc GetOwnDevice(Empty) returns (OwnDeviceState);
+  rpc RegisterDevice(RegisterDeviceRequest) returns (OwnDeviceState);
+  rpc ReplaceOwnDevice(ReplaceOwnDeviceRequest) returns (OwnDeviceState);
+  rpc CreateConversation(CreateConversationRequest) returns (Conversation);
+  rpc GetConversation(GetConversationRequest) returns (Conversation);
+  rpc UploadPreKeys(UploadPreKeysRequest) returns (UploadReceipt);
+  rpc GetPreKeyInventory(GetPreKeyInventoryRequest) returns (PreKeyInventory);
+  rpc AcquireBundle(AcquireBundleRequest) returns (AcquiredBundle);
+  rpc SendMessage(SendMessageRequest) returns (SendReceipt);
+  rpc GetPendingMessages(GetPendingMessagesRequest) returns (PendingMessages);
+  rpc GetMessageStatuses(GetMessageStatusesRequest) returns (MessageStatuses);
+  rpc StreamMessages(StreamMessagesRequest) returns (stream Delivery);
+  // Optional, lossy wake-up hints. Always fetch/ACK through the durable inbox;
+  // keep polling even while connected. No ciphertext or delivery cursor here.
+  rpc WatchInbox(StreamMessagesRequest) returns (stream InboxHint);
+  rpc AcknowledgeMessages(AcknowledgeMessagesRequest) returns (Empty);
+}
+
+message Empty {}
+
+// SESSION1 control contract only. These types add NO enabled RPC, capability,
+// epoch storage or protocol2 message reader. Existing v1 messages stay unchanged.
+enum RecoveryAction {
+  RECOVERY_ACTION_UNSPECIFIED = 0;
+  RECOVERY_ACTION_PROPOSE = 1;
+  RECOVERY_ACTION_ACCEPT = 2;
+  RECOVERY_ACTION_DECLINE = 3;
+  RECOVERY_ACTION_CANCEL = 4;
+}
+
+message RecoveryParticipant {
+  DeviceRef device = 1;
+  bytes identity_fingerprint = 2; // SHA256 of the pinned 33-byte Signal identity.
+}
+
+message RecoveryControl {
+  uint32 protocol_version = 1; // Exactly 2; not the currently enabled messaging v1.
+  uint32 format_version = 2;   // Exactly 1; canonical frame domain version.
+  CryptoSuite crypto_suite = 3;
+  RecoveryAction action = 4;
+  string conversation_id = 5;
+  string request_id = 6;  // Durable operation UUID, reused on exact retry.
+  string proposal_id = 7; // Propose: equals request_id; decisions: original proposal.
+  uint64 expected_epoch = 8;
+  uint64 expected_revision = 9;
+  RecoveryParticipant initiator = 10;
+  RecoveryParticipant peer = 11;
+  bytes proposal_digest = 12; // Empty for Propose; 32 bytes for every decision.
+}
+
+message SignedRecoveryControl {
+  RecoveryControl control = 1;
+  bytes signature = 2; // 64-byte libsignal identity signature of canonical frame.
+}
+
+enum RecoveryState {
+  RECOVERY_STATE_UNSPECIFIED = 0;
+  RECOVERY_STATE_PENDING = 1;
+  RECOVERY_STATE_ACCEPTED = 2;
+  RECOVERY_STATE_DECLINED = 3;
+  RECOVERY_STATE_CANCELLED = 4;
+  RECOVERY_STATE_EXPIRED = 5;
+  RECOVERY_STATE_SUPERSEDED = 6;
+}
+
+message RecoveryOutcome {
+  uint32 protocol_version = 1; // Exactly 2.
+  SignedRecoveryControl proposal = 2;
+  RecoveryState state = 3;
+  SignedRecoveryControl decision = 4; // Accept/Decline/Cancel; absent otherwise.
+  uint64 new_epoch = 5;      // Accepted only: expected_epoch + 1.
+  uint64 epoch_revision = 6; // Accepted only: expected_revision + 1.
+  // Authentication/CAS/expiry come from the future authenticated server API.
+  // Signatures alone do not prove server COMMIT, expiry or manual UI consent.
+}
+
+// Exact pending Send binding, built by native from its retained request. This
+// is not an Envelope and does not add protocol2 support to the v1 Send RPC.
+message EpochSendBinding {
+  uint32 protocol_version = 1; // Envelope framing2/3; recovery controls remain2.
+  string conversation_id = 2;
+  uint64 epoch = 3;
+  string message_id = 4;
+  DeviceRef sender = 5;
+  DeviceRef recipient = 6;
+  bytes envelope_digest = 7;
+}
+
+message EpochSealedFence {
+  EpochSendBinding binding = 1;
+  bytes proposal_digest = 2;
+  uint64 next_epoch = 3;
+  uint64 epoch_revision = 4;
+  // Bound to an Accepted recovery outcome. This future typed Send response is
+  // never synthesized from NotFound, Cancelled, deadline or an empty inbox.
+  // It is not recipient ACK, a read receipt, or permission to delete ciphertext.
+}
+
+// Carried as one typed detail in google.rpc.Status (grpc-status-details-bin).
+// A reason is an observation, never permission to reset keys, replace a device
+// or renew an acquisition without checking durable local session/outbox state.
+enum FailureReason {
+  FAILURE_REASON_UNSPECIFIED = 0;
+  FAILURE_REASON_SESSION_INVALID = 1; // Missing/invalid/expired/revoked JWT session.
+  FAILURE_REASON_DEVICE_CREDENTIAL_INVALID = 2; // Does not prove device replacement.
+  FAILURE_REASON_PASSWORD_INVALID = 3;
+  FAILURE_REASON_GENERATION_CHANGED = 4;
+  FAILURE_REASON_ACQUISITION_EXPIRED = 5;
+}
+
+message Failure {
+  FailureReason reason = 1; // Unknown/malformed details must fail conservatively.
+}
+
+enum CryptoSuite {
+  CRYPTO_SUITE_UNSPECIFIED = 0;
+  // Library-owned PQ bootstrap/ratchet state, currently pinned to libsignal
+  // v0.105.1. A library update alone does not prove wire/storage compatibility.
+  CRYPTO_SUITE_SIGNAL_PQ_1 = 1;
+}
+
+message Limits {
+  uint32 max_request_bytes = 1;
+  uint32 max_text_bytes = 2;
+  uint32 max_keys_per_kind_per_upload = 3;
+  uint32 max_acknowledgements = 4;
+  uint32 max_inbox_messages = 5;
+  uint32 max_response_bytes = 6;
+}
+
+message Capabilities {
+  uint32 protocol_version = 1;
+  repeated CryptoSuite crypto_suites = 2;
+  uint32 max_active_devices = 3;
+  Limits limits = 4;
+  // Must remain false until the corresponding authenticated implementation is ready.
+  bool device_registration_available = 5;
+  bool messaging_available = 6;
+}
+
+message DeviceRef {
+  string user_id = 1;       // Canonical account UUID, not the numeric JWT subject.
+  uint32 device_id = 2;     // libsignal DeviceId: 1..127; first MVP uses one active device.
+  string generation_id = 3; // Server-generated UUIDv4; changes on explicit replacement.
+}
+
+// The server binds this to the current JWT and a separate device credential.
+// Never use the claimed generation alone as proof of device ownership.
+message ClientContext {
+  uint32 protocol_version = 1;
+  string device_generation_id = 2;
+}
+
+message Device {
+  DeviceRef reference = 1;
+  uint32 registration_id = 2;
+  bytes identity_key = 3; // Public libsignal serialization only.
+  bool public_material_ready = 4;
+  uint64 public_material_revision = 5; // Server CAS revision; 0 before publication.
+}
+
+message OwnDeviceState {
+  string user_id = 1; // Derived from authenticated numeric subject -> users.user_uuid.
+  Device active_device = 2; // Absent when none is registered; never returns a secret.
+}
+
+message RegisterDeviceRequest {
+  uint32 protocol_version = 1;
+  string registration_request_id = 2; // UUIDv4, persisted before sending; exact retries only.
+  uint32 registration_id = 3;
+  bytes identity_key = 4;
+  // SHA256("zchat.e2ee.device.v1\0" || random 32-byte device credential).
+  // The credential itself belongs in OS-protected native storage and authenticated
+  // RPC metadata over TLS. Registration must verify possession before committing.
+  bytes credential_hash = 5;
+  // No user_id: the caller cannot register a device on another account.
+  // Existing identity is not replaced by registration or ordinary login.
+}
+
+// Explicit action, never automatic login recovery. The UI must explain loss of
+// old-device E2EE access and that local history does not transfer automatically.
+message ReplaceOwnDeviceRequest {
+  uint32 protocol_version = 1;
+  string replacement_request_id = 2;
+  string expected_generation_id = 3; // Compare-and-swap; do not replace a newer device.
+  uint32 registration_id = 4;
+  bytes identity_key = 5;
+  bytes credential_hash = 6;
+  string current_password = 7; // Reverify server-side; NEVER log/dump this request.
+}
+
+enum ConversationMode {
+  CONVERSATION_MODE_UNSPECIFIED = 0;
+  CONVERSATION_MODE_SIGNAL_PQ_1 = 1;
+}
+
+enum ConversationState {
+  CONVERSATION_STATE_UNSPECIFIED = 0;
+  CONVERSATION_STATE_ACTIVE = 1;
+  CONVERSATION_STATE_CLOSED = 2;
+}
+
+enum ConversationCloseReason {
+  CONVERSATION_CLOSE_REASON_UNSPECIFIED = 0;
+  CONVERSATION_CLOSE_REASON_DEVICE_REPLACED = 1;
+}
+
+message Conversation {
+  string conversation_id = 1; // UUIDv4 for the separate immutable encrypted chat.
+  ConversationMode mode = 2;
+  DeviceRef own_device = 3;
+  Device peer_device = 4;
+  ConversationState state = 5;
+  ConversationCloseReason close_reason = 6;
+  string closed_generation_id = 7; // Original participant generation that was replaced.
+  int64 closed_at_unix_ms = 8;     // Zero while active; archive is not deletion.
+}
+
+message CreateConversationRequest {
+  ClientContext context = 1;
+  string creation_request_id = 2;
+  int64 peer_user_id = 3; // Existing profile's numeric ID; server resolves peer UUID.
+}
+
+message GetConversationRequest {
+  ClientContext context = 1;
+  string conversation_id = 2;
+}
+
+message SignedPreKey {
+  uint32 key_id = 1;
+  bytes public_key = 2;
+  bytes signature = 3;
+  int64 created_at_unix_ms = 4;
+}
+
+message OneTimePreKey {
+  uint32 key_id = 1;
+  bytes public_key = 2;
+}
+
+message KyberPreKey {
+  uint32 key_id = 1;
+  bytes public_key = 2;
+  bytes signature = 3;
+  bool is_last_resort = 4;
+}
+
+message UploadPreKeysRequest {
+  ClientContext context = 1;
+  string batch_id = 2;
+  SignedPreKey signed_pre_key = 3;
+  repeated OneTimePreKey one_time_pre_keys = 4;
+  repeated KyberPreKey kyber_pre_keys = 5;
+  uint64 expected_revision = 6; // 0 initially; exact retry keeps the original revision.
+  // Atomic exact-batch retry; a re-upload must never reset consumed keys.
+}
+
+message UploadReceipt {
+  string batch_id = 1;
+  bytes batch_digest = 2;
+  uint64 publication_revision = 3; // expected_revision + 1 for this committed batch.
+}
+
+// Owner only: JWT + current-generation credential, never a peer lookup.
+message GetPreKeyInventoryRequest {
+  ClientContext context = 1;
+}
+
+// One database snapshot. Counts include retained used/old keys in the quotas;
+// available_pq excludes ALL reusable last-resort keys. Not an upload receipt.
+message PreKeyInventory {
+  DeviceRef own_device = 1;
+  uint64 publication_revision = 2;
+  bool public_material_ready = 3;
+  uint32 available_ec = 4;
+  uint32 available_pq = 5;
+  uint32 retained_ec = 6;
+  uint32 retained_pq = 7;
+  uint32 retained_signed = 8;
+  uint32 publication_batches = 9;
+  uint32 max_retained_ec = 10;
+  uint32 max_retained_pq = 11;
+  uint32 max_retained_signed = 12;
+  uint32 max_publication_batches = 13;
+  // Optional because zero is a valid libsignal key ID.
+  optional uint32 active_signed_id = 14;
+  optional uint32 active_last_resort_id = 15;
+  optional int64 active_signed_created_at_unix_ms = 16;
+  // LR has no creation timestamp in the existing server schema. No invented age.
+}
+
+message AcquireBundleRequest {
+  ClientContext context = 1;
+  string conversation_id = 2;
+  string acquisition_id = 3; // Persist before sending; scoped to the owning generation.
+  DeviceRef expected_peer = 4;
+}
+
+message AcquiredBundle {
+  string acquisition_id = 1;
+  string conversation_id = 2;
+  Device device = 3;
+  SignedPreKey signed_pre_key = 4;
+  OneTimePreKey one_time_pre_key = 5; // Optional: EC pool exhaustion is supported.
+  KyberPreKey kyber_pre_key = 6;      // Required: one-time or active last-resort; no PQ downgrade.
+  // Exclusive acquisition deadline; exact retries never extend it. Clients must
+  // start bootstrap before this deadline. This is not a message/private-key TTL:
+  // private retention must also cover pending delivery/grace. No GC is implied.
+  int64 not_after_unix_ms = 7;
+}
+
+enum CiphertextType {
+  CIPHERTEXT_TYPE_UNSPECIFIED = 0;
+  CIPHERTEXT_TYPE_PREKEY_SIGNAL = 1;
+  CIPHERTEXT_TYPE_SIGNAL = 2;
+}
+
+message Envelope {
+  uint32 protocol_version = 1;
+  CryptoSuite crypto_suite = 2;
+  string message_id = 3;
+  string conversation_id = 4;
+  DeviceRef sender = 5;
+  DeviceRef recipient = 6;
+  CiphertextType message_type = 7;
+  bytes ciphertext = 8;
+  // Routing only. Receiver must compare these fields with the authenticated
+  // EncryptedPayload after libsignal decrypt; the server cannot validate plaintext.
+}
+
+message SendMessageRequest {
+  ClientContext context = 1;
+  Envelope envelope = 2;
+}
+
+message SendReceipt {
+  string message_id = 1;
+  // SHA256 of the explicit v1 field frame; independent of protobuf field order.
+  // See internal/e2ee/digest.go and proto/fixtures/README.md for byte framing.
+  bytes envelope_digest = 2;
+  int64 stored_at_unix_ms = 3;
+  int64 expires_at_unix_ms = 4;
+  // Means server persistence, not recipient storage/decryption/read.
+}
+
+message StreamMessagesRequest {
+  ClientContext context = 1;
+  // Always resume from server's unacknowledged inbox; no client cursor can discard it.
+}
+
+message Delivery {
+  int64 sequence = 1; // Positive server sequence; maps to signed PostgreSQL BIGINT.
+  Envelope envelope = 2;
+  int64 expires_at_unix_ms = 3;
+  bytes envelope_digest = 4; // Immutable SendReceipt binding; verify before decrypt.
+}
+
+message InboxHint { uint32 protocol_version = 1; }
+
+message GetPendingMessagesRequest {
+  ClientContext context = 1;
+  // No cursor: ACKed messages disappear; every call starts at the first live
+  // unacknowledged row. Reading a page cannot discard or acknowledge anything.
+}
+
+message PendingMessages { repeated Delivery messages = 1; }
+
+message MessageReference {
+  string message_id = 1;
+  bytes envelope_digest = 2;
+}
+
+message GetMessageStatusesRequest {
+  ClientContext context = 1;
+  repeated MessageReference messages = 2; // Current sender generation only; max100.
+  // A bounded status refresh may finalize expired/replaced-recipient storage.
+  // It never erases persistence/dedup evidence or overrides a recipient ACK.
+}
+
+enum MessageState {
+  MESSAGE_STATE_UNSPECIFIED = 0;
+  MESSAGE_STATE_PENDING = 1;
+  MESSAGE_STATE_RECIPIENT_STORED = 2; // Recipient reports durable storage, not read/decrypt.
+  MESSAGE_STATE_RECIPIENT_REJECTED = 3; // Recipient reports durable quarantine.
+  MESSAGE_STATE_EXPIRED = 4; // Server copy removed without an ACK known at that time.
+  MESSAGE_STATE_RECIPIENT_REPLACED = 5;
+}
+
+message MessageStatus {
+  SendReceipt receipt = 1;
+  MessageState state = 2;
+  int64 observed_at_unix_ms = 3;
+  // Expired is not proof of loss: a later matching ACK takes precedence,
+  // while the original immutable removal event remains recorded.
+}
+
+message MessageStatuses { repeated MessageStatus messages = 1; } // Request order, all-or-nothing.
+
+enum AckDisposition {
+  ACK_DISPOSITION_UNSPECIFIED = 0;
+  ACK_DISPOSITION_STORED = 1;
+  ACK_DISPOSITION_REJECTED = 2; // Only after durable local quarantine; never silent deletion.
+}
+
+message Acknowledgement {
+  string message_id = 1;
+  bytes envelope_digest = 2;
+  AckDisposition disposition = 3;
+}
+
+message AcknowledgeMessagesRequest {
+  ClientContext context = 1;
+  repeated Acknowledgement messages = 2;
+}
+
+// Serialized into libsignal's authenticated plaintext, never sent to Go as plaintext.
+message EncryptedPayload {
+  uint32 format_version = 1;
+  string message_id = 2;
+  string conversation_id = 3;
+  DeviceRef sender = 4;
+  DeviceRef recipient = 5;
+  int64 created_at_unix_ms = 6;
+  oneof content {
+    TextMessage text = 7;
+    SessionConfirmation session_confirmation = 8;
+  }
+  // Attachments/group/call encryption are not supported by this first contract.
+}
+
+message TextMessage { string text = 1; }
+
+message SessionConfirmation {
+  string in_reply_to_message_id = 1;
+  // Cryptographic session confirmation, not a read receipt. Never acknowledge
+  // another SessionConfirmation by generating a new SessionConfirmation.
+}

@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        env:
+          POSTGRES_USER: zchat_ci
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: zchat_ci
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U zchat_ci -d zchat_ci"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check local setup and Make commands
+        run: python3 scripts/check-setup.py
+      - name: Check mixed load runner safeguards
+        run: python3 -m unittest discover -s scripts/load -p 'test_mixed.py' -v
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Verify Go modules
+        run: go mod verify
+      - name: Vet Go
+        run: go vet ./...
+      - name: Check reachable Go dependency vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+      - name: Go race and PostgreSQL integration tests
+        env:
+          # Public, disposable CI database; never use these credentials in deployment.
+          ZCHAT_TEST_DATABASE_URL: postgres://zchat_ci:ci-only-password@127.0.0.1:5432/zchat_ci?sslmode=disable
+        # PG migrations and durable filesystem fixtures share the runner's disk.
+        # Serialize packages; concurrency inside tests and the race detector stay enabled.
+        # Allow the growing schema-per-case PG suite to finish. Individual API,
+        # cleanup and lock-wait deadlines remain enforced by their tests.
+        run: go test -race -p=1 ./... -count=1 -timeout=600s
+      - name: Install protocol generators
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          mkdir -p "$RUNNER_TEMP/proto-bin"
+          export GOBIN="$RUNNER_TEMP/proto-bin"
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.1
+          go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.29.0
+          echo "$RUNNER_TEMP/proto-bin" >> "$GITHUB_PATH"
+      - name: Check committed Go protocols
+        run: bash scripts/gen-proto.sh --check
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - name: Install locked frontend dependencies
+        run: npm ci
+      - name: Check frontend and build local assets
+        run: |
+          npm run typecheck:chat
+          npm run test:chat
+          node --check web/login.js
+          npm run build:chat
+          npm audit --audit-level=high
+      - name: Check source and dependency drift
+        run: |
+          git diff --check
+          git diff --exit-code -- go.mod go.sum package.json package-lock.json gen
+
+  image:
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build complete runtime image from checkout
+        run: docker build --target final -t zchat-ci:local .
+      - name: Check packaged HTTP and WebSocket flows
+        run: bash scripts/smoke-compose.sh zchat-ci:local

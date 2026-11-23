@@ -1,0 +1,123 @@
+[package]
+name = "rust-processor"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+license = "AGPL-3.0-only"
+
+[features]
+default = ["compression"]
+compression = ["dep:image", "dep:mozjpeg", "dep:webp"]
+e2ee = [
+    "dep:aes",
+    "dep:aes-gcm-siv",
+    "dep:async-trait",
+    "dep:libsignal-protocol",
+    "dep:prost",
+    "dep:rand",
+    "dep:rusqlite",
+    "dep:sha2",
+    "dep:tokio",
+    "dep:tonic",
+    "dep:tonic-prost",
+    "dep:tonic-prost-build",
+    "dep:uuid",
+    "dep:url",
+    "dep:windows-sys",
+    "dep:zeroize",
+    "dep:base64",
+    "dep:bytes",
+    "dep:futures-util",
+    "dep:hyper",
+    "dep:hyper-util",
+    "dep:http-body-util",
+    "dep:tokio-rustls",
+    "dep:rustls-platform-verifier",
+    "dep:rustls",
+    "dep:tokio-util",
+]
+
+[dependencies]
+aes = { version = "0.9.3", features = ["zeroize"], optional = true }
+aes-gcm-siv = { version = "0.12.1", default-features = false, features = ["aes", "alloc", "zeroize"], optional = true }
+image = { version = "0.25.10", default-features = false, features = ["bmp", "gif", "jpeg", "png", "tiff", "webp"], optional = true }
+mozjpeg = { version = "0.10.13", default-features = false, optional = true }
+webp = { version = "0.3.1", optional = true }
+thiserror = "2.0.21"
+
+libsignal-protocol = { git = "https://github.com/signalapp/libsignal", tag = "v0.105.1", package = "libsignal-protocol", features = ["kyber768"], optional = true }
+rand = { version = "0.9.4", optional = true }
+tokio = { version = "1.53.3", features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util"], optional = true }
+tonic = { version = "0.14.6", features = ["tls-ring", "tls-native-roots"], optional = true }
+prost = { version = "0.14.4", optional = true }
+tonic-prost = { version = "0.14.6", optional = true }
+rusqlite = { version = "0.41.0", features = ["bundled"], optional = true }
+sha2 = { version = "0.11.1", optional = true }
+async-trait = { version = "0.1.92", optional = true }
+uuid = { version = "1.28.0", features = ["v4"], optional = true }
+url = { version = "2.5.8", optional = true }
+zeroize = { version = "1.9.1", optional = true }
+base64 = { version = "0.23.1", optional = true }
+bytes = { version = "1.12.1", optional = true }
+futures-util = { version = "0.3", optional = true }
+hyper = { version = "1.12.0", features = ["client", "http1"], optional = true }
+hyper-util = { version = "0.1.21", features = ["tokio"], optional = true }
+http-body-util = { version = "0.1.5", optional = true }
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"], optional = true }
+rustls-platform-verifier = { version = "0.7.1", optional = true }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"], optional = true }
+tokio-util = { version = "0.7", features = ["rt"], optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security_Cryptography"], optional = true }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+png = "=0.18.1"
+tiff = { version = "=0.11.3", default-features = false }
+serde_json = "1"
+
+[build-dependencies]
+tonic-prost-build = { version = "0.14.6", optional = true }
+
+[[bin]]
+name = "rust-processor"
+path = "src/main.rs"
+required-features = ["e2ee"]
+
+[[test]]
+name = "store_tests"
+path = "tests/store_tests.rs"
+required-features = ["e2ee"]
+
+[[test]]
+name = "compression_tests"
+path = "tests/compression_tests.rs"
+required-features = ["compression"]
+
+[[test]]
+name = "contract_tests"
+path = "tests/contract_tests.rs"
+required-features = ["e2ee"]
+
+[[test]]
+name = "publication_tests"
+path = "tests/publication_tests.rs"
+required-features = ["e2ee"]
+
+[[test]]
+name = "legacy_regressions"
+path = "tests/legacy_regressions.rs"
+required-features = ["e2ee"]
+
+[[example]]
+name = "generate_prekey_fixture"
+required-features = ["e2ee"]
+
+[[example]]
+name = "generate_recovery_fixture"
+required-features = ["e2ee"]
+
+[[example]]
+name = "generate_epoch_fixture"
+required-features = ["e2ee"]
